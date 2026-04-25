@@ -234,6 +234,23 @@ threads worth pulling on:
   the bicategory of optics via the `Para` construction. Making that explicit
   would let lens machinery be used directly on learner state.
 
+## Mathematical write-up
+
+A self-contained mathematical companion lives at
+[`docs/math.tex`](docs/math.tex). It covers the category of learners
+(definition, sequential composition, monoidal product), the two
+worked instances (Bühlmann credibility, gradient linear regression),
+the Env comonad over the monoid of governance objects, validation as
+a co-Kleisli arrow, and layered regulation. Diagrams are typeset with
+`tikz-cd`. Build with:
+
+```bash
+cd docs && latexmk -pdf math.tex
+```
+
+A bibliography of the underlying papers is maintained at
+[`docs/REFERENCES.md`](docs/REFERENCES.md).
+
 ## References
 
 - Fong, Spivak, Tuyéras — *Backprop as Functor*

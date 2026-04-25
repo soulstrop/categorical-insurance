@@ -11,3 +11,12 @@ dist-newstyle/
 # Local-only reading copies of copyrighted material
 docs/*.pdf
 docs/*.zip
+
+# LaTeX build artifacts
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.synctex.gz
