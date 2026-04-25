@@ -78,10 +78,37 @@ src/Examples/
   Linear.hs        -- Online-SGD linear regression
                    --   as Learner [Double] Double
                    --   request map carries the input-gradient ∂L/∂x = (ŷ - y) w
-  Insurance.hs     -- Proposal type + composable Rules
-                   --   (positivePremium, maxLossRatio, coverageCap)
-                   --   demo :: IO () exercises learners + governance end-to-end
+  Proposal.hs      -- shared Proposal + ProductLine record
+  Regulation.hs    -- composable regulatory bundles:
+                   --   federalRegulations  (protected class, ACA MLR floor)
+                   --   california          (Prop 103, min auto liability)
+                   --   newYork             (min auto liability)
+                   --   forJurisdiction / forProductLine guard combinators
+  Guardrails.hs    -- internal ML/pricing guardrails:
+                   --   consentRequired, rateStability, explainabilityFloor,
+                   --   reinsuranceCession; bundled as internalUnderwriting
+  Insurance.hs     -- basicGovernance + defaultProposal + demo :: IO ()
+                   --   demo composes regulatory bundles and guardrails into
+                   --   a layered regime and exercises each layer
 ```
+
+#### Layered governance
+
+The demo's contract regime is constructed by `Monoid` composition of four
+governance bundles carried by the `Governed` comonad:
+
+```haskell
+caRegime = federalRegulations    -- federal statute
+        <> california            -- state statute (Prop 103, min liability)
+        <> internalUnderwriting  -- ML/pricing guardrails
+        <> basicGovernance       -- premium > 0, loss-ratio cap, coverage cap
+```
+
+Switching jurisdictions is a one-line edit (`<> newYork` instead of
+`<> california`), and a proposal that passes federal but fails Prop 103 (or
+that uses a federally prohibited rating factor) is rejected with one
+violation per layer that catches it — making layered enforcement legible
+rather than collapsing into a single yes/no.
 
 The `demo` shows:
 
@@ -89,8 +116,8 @@ The `demo` shows:
 - A linear regressor recovering known weights `[2, 3]` to ~10 digits after
   1400 SGD steps.
 - A two-policy portfolio learned via `parallel`, with independent posteriors.
-- Three proposals run through governance: one approved, one rejected for
-  exceeding the loss-ratio cap, one rejected for excessive coverage.
+- Eleven proposals run through the layered regime: one approved, ten rejected
+  across federal, state, internal-guardrail, and basic-underwriting layers.
 
 ## How
 
@@ -119,26 +146,42 @@ ghci> import Examples.Insurance
 ghci> demo
 ```
 
-Expected output:
+Expected output (abridged):
 
 ```
 === Bayesian credibility learner ===
-  observed claims : [1200.0,1500.0,980.0,1100.0,1300.0,1450.0,1050.0]
   posterior mean  : 1224.91...
 
 === linear regression learner ===
-  truth weights ≈ [2.0, 3.0]
-  recovered ≈ [2.0000...,2.9999...]
+  recovered ≈ [2.0000..., 2.9999...]
 
 === parallel portfolio (two policies) ===
   posterior means : (1012.4..., 2170.7...)
 
-=== contract validation ===
-  loaded      → APPROVED: Proposal {...}
-  underpriced → REJECTED:
-    - max_loss_ratio: loss ratio 0.95... exceeds cap 0.85
-  overcovered → REJECTED:
-    - coverage_cap: coverage exceeds 10.0x premium
+=== composed governance: federal <> state <> guardrails <> underwriting ===
+  CA / clean baseline                 → APPROVED
+  CA / federal: prohibited factor     → REJECTED:
+    - federal/protected_class: rating factors prohibited under federal law: ["race"]
+    - ca/prop_103: Prop 103: rating factors not in approved auto set: ["race"]
+  CA / Prop 103: factor not approved  → REJECTED:
+    - ca/prop_103: ...
+  CA / state: sub-min auto liability  → REJECTED:
+    - ca/min_auto_liability: California auto liability minimum is 15,000
+  NY / state: sub-min auto liability  → REJECTED:
+    - ny/min_auto_liability: New York auto liability minimum is 25,000
+  guardrail / no insured consent      → REJECTED:
+    - guardrail/consent: insured consent for data use is required
+  guardrail / rate shock vs prior     → REJECTED:
+    - guardrail/rate_stability: ...
+  guardrail / low explainability      → REJECTED:
+    - guardrail/explainability: ...
+  guardrail / large coverage no re    → REJECTED:
+    - guardrail/reinsurance_cession: ...
+  underwriting / loss ratio > cap     → REJECTED:
+    - max_loss_ratio: ...
+    - coverage_cap: ...
+  underwriting / coverage > 10x prem  → REJECTED:
+    - coverage_cap: ...
 ```
 
 ### Writing a new learner
@@ -181,9 +224,12 @@ threads worth pulling on:
   governance can reason about posterior uncertainty, not just the mean.
 - **Audit-aware governance.** Widen `Rule` to inspect a learner's audit trail
   (state at decision time, training history) rather than only the proposal.
-- **Cokleisli arrows on `Governed`.** The comonad's `extend` and `duplicate`
-  aren't yet doing categorical work; they will become useful when modelling
-  layered governance (federal wrapping state wrapping product-line).
+- **Cokleisli arrows on `Governed`.** Layered governance is currently
+  expressed via the `Monoid` instance on `Governance` carried by the
+  comonad — composition is at the environment level, not the comonad
+  itself. `extend` and `duplicate` become useful when arrows need to
+  *transform* governance contextually (e.g., a re-audit step that injects
+  additional rules based on what the proposal already passed).
 - **Lens / Para alignment.** Sequential composition of learners embeds into
   the bicategory of optics via the `Para` construction. Making that explicit
   would let lens machinery be used directly on learner state.

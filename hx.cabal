@@ -3,8 +3,8 @@ name:               hx
 version:            0.1.0.0
 synopsis:           Categorical learners and governance for insurance contracts
 license:            MIT
-author:             Author
-maintainer:         author@example.com
+author:             J. Michael Constans
+maintainer:         mikeco@constans.dev
 build-type:         Simple
 
 library
@@ -14,6 +14,9 @@ library
         Contract
         Examples.Credibility
         Examples.Linear
+        Examples.Proposal
+        Examples.Regulation
+        Examples.Guardrails
         Examples.Insurance
     hs-source-dirs:   src
     default-language: GHC2021

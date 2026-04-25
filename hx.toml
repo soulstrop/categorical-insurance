@@ -1,4 +1,4 @@
-q[project]
+[project]
 name = "hx"
 kind = "lib"
 resolver = "cabal"

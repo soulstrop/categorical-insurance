@@ -1,23 +1,61 @@
--- | A small end-to-end demo: train learners, build a 'Proposal' from
--- their output, and validate it through a composable 'Governance'.
+-- | End-to-end demo: train learners, build a 'Proposal' from their
+-- output, and validate it through layered, composable 'Governance'.
+--
+-- The contract regime is constructed by 'Monoid' composition of four
+-- bundles carried by the 'Governed' comonad:
+--
+--   * 'Examples.Regulation.federalRegulations'  — federal statute
+--   * 'Examples.Regulation.california' \/ '.newYork' — state statute
+--   * 'Examples.Guardrails.internalUnderwriting' — internal ML/pricing
+--                                                  guardrails
+--   * 'basicGovernance'                          — basic underwriting
+--                                                  hygiene
+--
+-- Their order of composition is irrelevant (the underlying 'Monoid' is
+-- commutative for our purposes — rule predicates do not interact),
+-- but reading left-to-right roughly captures decreasing legal weight
+-- and increasing carrier discretion.
 module Examples.Insurance
-    ( Proposal (..)
+    ( -- * Proposal (re-exported)
+      Proposal (..)
+    , ProductLine (..)
+    , defaultProposal
+
+      -- * Basic underwriting hygiene
     , basicGovernance
+    , positivePremium
+    , maxLossRatio
+    , coverageCap
+
+      -- * Demo
     , demo
     ) where
 
 import Contract
 import Examples.Credibility (credibilityLearner)
+import Examples.Guardrails (internalUnderwriting)
 import Examples.Linear (linearLearner)
+import Examples.Proposal
+import Examples.Regulation (california, federalRegulations, newYork)
 import Governance
 import Learner
 
-data Proposal = Proposal
-    { proposalPremium :: !Double
-    , proposalCoverage :: !Double
-    , proposalExpectedClaim :: !Double
-    }
-    deriving (Show)
+-- | A Proposal seeded from an expected-claim value; defaults pass all
+-- four governance layers when used as-is.
+defaultProposal :: Double -> Proposal
+defaultProposal ec =
+    Proposal
+        { proposalPremium = ec * 1.65
+        , proposalCoverage = ec * 14
+        , proposalExpectedClaim = ec
+        , proposalJurisdiction = "CA"
+        , proposalProductLine = Auto
+        , proposalRatingFactors = ["driving_record", "miles_driven"]
+        , proposalConsent = True
+        , proposalPriorPremium = Just (ec * 1.55)
+        , proposalExplainabilityScore = 0.75
+        , proposalCession = 0.0
+        }
 
 positivePremium :: Rule Proposal
 positivePremium = Rule "positive_premium" $ \p ->
@@ -80,7 +118,7 @@ demo = do
         pts = [[1, 2], [3, 1], [2, 2], [4, 1], [0, 3], [2, 0], [1, 1]]
         training = [(p, truth p) | p <- pts]
         lin = trainLinear (concat (replicate 200 training))
-    putStrLn $ "  truth weights ≈ [2.0, 3.0]"
+    putStrLn "  truth weights ≈ [2.0, 3.0]"
     putStrLn $ "  recovered ≈ " ++ show [runLearner lin [1, 0], runLearner lin [0, 1]]
 
     putStrLn ""
@@ -94,21 +132,80 @@ demo = do
     putStrLn $ "  posterior means : " ++ show (runLearner two' ((), ()))
 
     putStrLn ""
-    putStrLn "=== contract validation ==="
-    let loaded =
-            Proposal
-                { proposalPremium = ec * 1.40
-                , proposalCoverage = ec * 8
-                , proposalExpectedClaim = ec
-                }
-        underpriced = loaded {proposalPremium = ec * 1.05}
-        overcovered = loaded {proposalCoverage = ec * 25}
-    showResult "loaded     " (validate (withGovernance basicGovernance loaded))
-    showResult "underpriced" (validate (withGovernance basicGovernance underpriced))
-    showResult "overcovered" (validate (withGovernance basicGovernance overcovered))
+    putStrLn "=== composed governance: federal <> state <> guardrails <> underwriting ==="
+    let baseline = defaultProposal ec
+        caRegime = federalRegulations <> california <> internalUnderwriting <> basicGovernance
+        nyRegime = federalRegulations <> newYork <> internalUnderwriting <> basicGovernance
+
+    showResult "CA / clean baseline                " $
+        validate (withGovernance caRegime baseline)
+
+    showResult "CA / federal: prohibited factor    " $
+        validate
+            ( withGovernance
+                caRegime
+                baseline {proposalRatingFactors = ["driving_record", "race"]}
+            )
+
+    showResult "CA / Prop 103: factor not approved " $
+        validate
+            ( withGovernance
+                caRegime
+                baseline {proposalRatingFactors = ["driving_record", "credit_score"]}
+            )
+
+    showResult "CA / state: sub-min auto liability " $
+        validate (withGovernance caRegime baseline {proposalCoverage = 10000})
+
+    showResult "NY / state: sub-min auto liability " $
+        validate
+            ( withGovernance
+                nyRegime
+                baseline
+                    { proposalJurisdiction = "NY"
+                    , proposalCoverage = 20000
+                    }
+            )
+
+    showResult "guardrail / no insured consent     " $
+        validate (withGovernance caRegime baseline {proposalConsent = False})
+
+    showResult "guardrail / rate shock vs prior    " $
+        validate (withGovernance caRegime baseline {proposalPremium = ec * 2.20})
+
+    showResult "guardrail / low explainability     " $
+        validate
+            (withGovernance caRegime baseline {proposalExplainabilityScore = 0.40})
+
+    showResult "guardrail / large coverage no re   " $
+        validate
+            ( withGovernance
+                caRegime
+                baseline
+                    { proposalCoverage = 150000
+                    , proposalPremium = ec * 30
+                    , proposalCession = 0.0
+                    , proposalPriorPremium = Nothing
+                    }
+            )
+
+    showResult "underwriting / loss ratio > cap    " $
+        validate
+            ( withGovernance
+                caRegime
+                baseline
+                    { proposalPremium = ec * 1.05
+                    , proposalPriorPremium = Nothing
+                    }
+            )
+
+    showResult "underwriting / coverage > 10x prem " $
+        validate (withGovernance caRegime baseline {proposalCoverage = ec * 25})
   where
-    showResult name (Right c) =
-        putStrLn $ "  " ++ name ++ " → APPROVED: " ++ show (contractView c)
+    showResult name (Right _) =
+        putStrLn $ "  " ++ name ++ " → APPROVED"
     showResult name (Left vs) = do
         putStrLn $ "  " ++ name ++ " → REJECTED:"
-        mapM_ (\v -> putStrLn $ "    - " ++ violationRule v ++ ": " ++ violationDetail v) vs
+        mapM_
+            (\v -> putStrLn $ "    - " ++ violationRule v ++ ": " ++ violationDetail v)
+            vs
