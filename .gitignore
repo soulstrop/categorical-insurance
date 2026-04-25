@@ -1,0 +1,9 @@
+# hx
+.hx/
+dist-newstyle/
+
+# Cabal
+*.hi
+*.o
+*.dyn_hi
+*.dyn_o

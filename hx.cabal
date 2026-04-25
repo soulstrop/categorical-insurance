@@ -1,0 +1,22 @@
+cabal-version:      3.0
+name:               hx
+version:            0.1.0.0
+synopsis:           Categorical learners and governance for insurance contracts
+license:            MIT
+author:             Author
+maintainer:         author@example.com
+build-type:         Simple
+
+library
+    exposed-modules:
+        Learner
+        Governance
+        Contract
+        Examples.Credibility
+        Examples.Linear
+        Examples.Insurance
+    hs-source-dirs:   src
+    default-language: GHC2021
+    build-depends:
+        base >=4.17 && <5
+    ghc-options:      -Wall

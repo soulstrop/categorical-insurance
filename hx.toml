@@ -1,0 +1,64 @@
+q[project]
+name = "hx"
+kind = "lib"
+resolver = "cabal"
+
+[toolchain]
+
+[compiler]
+backend = "ghc"
+
+[compiler.bhc]
+profile = "default"
+emit_kernel_report = false
+tensor_fusion = false
+
+[compiler.ghc]
+profiling = false
+split_sections = false
+
+[stackage]
+allow_newer = false
+
+[stackage.extra_deps]
+
+[bhc-platform]
+allow_newer = false
+overlays = []
+
+[bhc-platform.extra_deps]
+
+[build]
+optimization = 1
+warnings = true
+werror = false
+ghc_flags = []
+src_dirs = ["src"]
+native = false
+
+[format]
+formatter = "fourmolu"
+
+[lint]
+hlint = false
+
+[plugins]
+enabled = true
+hook_timeout_ms = 5000
+paths = []
+continue_on_error = false
+
+[plugins.hooks]
+pre_build = []
+post_build = []
+pre_test = []
+post_test = []
+pre_run = []
+post_run = []
+pre_clean = []
+post_clean = []
+pre_lock = []
+post_lock = []
+init = []
+
+[dependencies]
