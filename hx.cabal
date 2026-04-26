@@ -12,11 +12,13 @@ library
         Learner
         Governance
         Contract
+        DecisionSystem
         Examples.Credibility
         Examples.Linear
         Examples.Proposal
         Examples.Regulation
         Examples.Guardrails
+        Examples.RiskScore
         Examples.Insurance
     hs-source-dirs:   src
     default-language: GHC2021

@@ -12,6 +12,26 @@
 --
 -- The bundle 'internalUnderwriting' wires them up with conservative
 -- defaults; tune per book of business or compose individually.
+--
+-- == Naming caveat (ADR 005)
+--
+-- Each entry below is a 'Rule' — that is, a 'Decision' valued in the
+-- @Maybe Violation@ \/ @[Violation]@ monoid with binary admit/deny.
+-- By the vocabulary of ADR 005 (\"Governance and Guardrails — Same
+-- Category, Different Monoids\") these are therefore *additional
+-- governance rules*, not categorical guardrails: each fires on or off,
+-- independently of the others, with conjunctive composition.
+--
+-- The name \"guardrails\" is retained here because the *concerns*
+-- addressed (consent, rate stability, explainability, reinsurance)
+-- are guardrail-flavoured in product discussions even when the
+-- implementation chooses a binary monoid for simplicity.
+--
+-- For a categorical guardrail in the strict ADR-005 sense — a
+-- decision system valued in a non-binary monoid with a thresholding
+-- admissibility predicate — see "Examples.RiskScore", which exhibits
+-- 'RiskScore' (the additive non-negative real monoid) and the joint
+-- product-monoid composition described in math.tex §VI.
 module Examples.Guardrails
     ( consentRequired
     , rateStability

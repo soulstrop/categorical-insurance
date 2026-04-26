@@ -84,13 +84,27 @@ src/Examples/
                    --   california          (Prop 103, min auto liability)
                    --   newYork             (min auto liability)
                    --   forJurisdiction / forProductLine guard combinators
-  Guardrails.hs    -- internal ML/pricing guardrails:
-                   --   consentRequired, rateStability, explainabilityFloor,
-                   --   reinsuranceCession; bundled as internalUnderwriting
+  Guardrails.hs    -- "guardrail-flavoured" governance rules (binary
+                   --   Decision[List Violation] under the hood; see
+                   --   ADR 005 + RiskScore.hs for the genuinely
+                   --   monoid-parameterised guardrail)
+  RiskScore.hs     -- math.tex §VI worked instance: M = RiskScore
+                   --   (additive non-negative reals) with thresholding
+                   --   admission; joint product-monoid example combining
+                   --   binary governance with graded guardrails;
+                   --   demoRisk :: IO () exercises both
   Insurance.hs     -- basicGovernance + defaultProposal + demo :: IO ()
                    --   demo composes regulatory bundles and guardrails into
                    --   a layered regime and exercises each layer
 ```
+
+The `DecisionSystem` module at the top level (`src/DecisionSystem.hs`)
+implements math.tex §VI: `Decision m p = p -> m`, `DecisionSystem m p =
+[Decision m p]`, `aggregate`, `GovernedDS` (Env comonad over a decision
+system), abstract `GenContract`, and `validateDS` parameterised by an
+admissibility predicate `m -> Bool`. Governance, Guardrails, and the
+joint product monoid are all instances of this one substrate, per
+ADR 005.
 
 #### Layered governance
 
