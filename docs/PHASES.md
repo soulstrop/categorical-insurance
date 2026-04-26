@@ -34,13 +34,20 @@ locally.
 
 **In scope.**
 * `Proposal`, `Contract`, `Violation` as Pydantic models.
-* `Rule = Callable[[Proposal], Optional[Violation]]` and
-  `Governance = list[Rule]`, composed with `+` (per ADR 001).
+* The `Decision[M]` substrate (per ADR 004): `Decision[M] =
+  Callable[[Proposal], M]` with a small `Monoid[M]` protocol
+  (`empty`, `combine`). The initial concrete monoid is
+  `M = list[Violation]` for **Governance** (per ADR 005), giving
+  the familiar `Governance = list[Decision[list[Violation]]]`
+  composed by `+`. Other monoid choices (Guardrails) are deferred
+  to later phases but the substrate is parameterised from day 1.
 * One closed-form learner: Bühlmann credibility (numpy).
-* `validate(governed: Governed[Proposal]) → Either[list[Violation], Contract]`.
+* `validate(governed: Governed[Proposal], adm: M → bool)
+  → Either[M, Contract]`, with the `M = list[Violation]`,
+  `adm = (m == [])` instantiation as the day-1 case.
 * A `Contract` constructor that is conventionally private (e.g., a
-  single classmethod `Contract.from_validated(...)`); the abstraction
-  barrier is documented in `CONTRIBUTING.md`.
+  single classmethod `Contract.from_validated(...)`); the
+  abstraction barrier is documented in `CONTRIBUTING.md`.
 * Synthetic data fixtures.
 * Tests in `pytest` covering happy paths and known violations.
 
@@ -84,6 +91,9 @@ governance composition).
   * `compose(compose(h, g), f) ≡ compose(h, compose(g, f))` up to
     observable behaviour
   * `p ⊨ G1 + G2 ⇔ p ⊨ G1 ∧ p ⊨ G2` (conjunctivity, ADR 001)
+  * Monoid laws on the registered `Monoid[M]` instances
+    (associativity, left/right identity) — required for every new
+    monoid module per ADR 005.
 * Validation outputs persisted as Parquet for downstream
   inspection.
 
@@ -117,8 +127,14 @@ from history rather than mutable.
 * dbt project for feature engineering with sources and contracts.
 * Pydantic ↔ dbt source-contract generation: a single source of
   truth for the `Proposal` shape across Python and SQL.
-* Snowpark vectorized UDF wrapping the Python rule DSL (per
-  ADR 001).
+* A *single* Snowpark vectorized UDF implementation parameterised
+  by `M` (per ADR 004); registered as one or more *instances*, one
+  per active monoid choice. The Phase 2 instance evaluates the
+  Governance monoid `M = list[Violation]`.
+* The UDF returns `(admitted: bool, m: M)` per row; the `m`
+  payload is persisted alongside the contract or rejection so that
+  downstream analytics can reason about the decision without
+  re-running the rules.
 * Observation table (append-only) and a SQL view that derives
   current learner state from history.
 * Cortex `EXTRACT_ANSWER`-style functions for unstructured inputs,
@@ -173,9 +189,21 @@ the Dagster UI.
   * Rejection rate per rule per day stays within a learned band
     (catches both new failure modes and rules that have stopped
     firing).
+  * Guardrail-distribution stability: per-day distribution of the
+    Phase 3 guardrail's `m` payload does not drift beyond a
+    learned envelope (per ADR 005's operational practice).
+* The first **Guardrail** in production: an additive risk score
+  with thresholded admission, using the same `Decision[M]`
+  substrate (per ADR 005). Concrete monoid:
+  `M = float`, `combine = +`, `empty = 0`, `adm(s) = s < cap`.
+* The validator runs as a **Joint** decision system in the product
+  monoid `list[Violation] × float`, persisting both the violation
+  list and the risk score on each contract row; admission is the
+  conjunction of components' `adm`.
 * SLA / freshness policies on key assets.
 * Cortex-based `explain_rejection` step producing a draft
-  human-readable letter from a `Violation` list.
+  human-readable letter from a `Violation` list and the guardrail
+  payload.
 * On-call runbook: top three failure modes and first-step
   responses.
 
@@ -204,20 +232,33 @@ proposals against a new policy version to answer "what would have
 happened?"
 
 **In scope.**
-* `governance_releases` table: each row is a versioned bundle of
-  policies, signed and immutable.
-* Every `contracts` row carries a `governance_version` foreign
-  key.
-* Per-jurisdiction Snowpark UDFs that are nothing more than
-  `compose(federal, state[X], internal)`; adding a new state is a
-  one-file change.
+* `decision_releases` table: each row is a versioned bundle of
+  decisions (governance and guardrail combined), signed and
+  immutable. (Generalises "governance bundle" — bundles
+  versioned together include both monoids' decision lists.)
+* Every `contracts` row carries a `decision_version` foreign key.
+* Per-jurisdiction Snowpark UDF instances that are nothing more
+  than `compose(federal, state[X], internal_governance,
+  internal_guardrail)`; adding a new state is a one-file change.
 * Replay job:
-  `replay(proposals, governance_version) → contracts'` for
+  `replay(proposals, decision_version) → contracts'` for
   retrospective analysis.
-* Carrier-internal bundles (a separate namespace for non-regulatory
-  rules) composed alongside the regulatory ones.
+* Carrier-internal bundles (a separate namespace for
+  non-regulatory rules, both governance and guardrail) composed
+  alongside the regulatory ones.
 * Two-person rule on changes to regulatory bundles, enforced via
   branch-protection plus an `OWNERS` file.
+* The **DMN/FEEL authoring surface** (per ADR 004's S2): actuaries
+  and underwriters author decision tables in a DMN modeller
+  (Camunda, Trisotech) with FEEL cell expressions; a build step
+  compiles each table into a `Decision[M]` (with `M` determined
+  by hit policy) and registers it alongside the
+  Python-authored decisions. DRDs of related tables compile to
+  co-Kleisli composites. Python remains the engineering authoring
+  surface; DMN is added because Phase 4's multi-party authoring
+  makes its visual-modeller payoff concrete.
+* A round-trip test in CI (per ADR 004's DMN-E6): Python decisions
+  export to DMN; re-import; behaviour identical on a fixture set.
 
 **Out of scope.**
 * Probabilistic outputs (Phase 5).
@@ -226,13 +267,17 @@ happened?"
 **Done conditions.**
 1. Adding a new jurisdiction (e.g., Texas) takes < 1 day of work
    and 0 architectural changes.
-2. Replay answers "with today's governance bundle, how many of
-   last quarter's approved contracts would have been rejected?"
-   as a single SQL query against the replay output.
-3. A policy-release diff is reviewable by compliance staff in the
-   same form they will sign off on (Python `Rule` predicates) and
-   carries a version bump that propagates automatically to every
-   newly-issued contract.
+2. Replay answers "with today's decision bundle, how many of last
+   quarter's approved contracts would have been rejected, and how
+   would the guardrail distribution have shifted?" as a single
+   SQL query against the replay output.
+3. A bundle-release diff is reviewable by compliance staff in
+   their preferred form (Python predicates, DMN tables, or both)
+   and carries a version bump that propagates automatically to
+   every newly-issued contract.
+4. At least one production rule has been authored end-to-end in
+   DMN and one in Python within the same release; both pass the
+   round-trip equivalence test.
 
 ---
 
@@ -276,28 +321,36 @@ instrumental rather than incidental.
 
 | Suggestion | Phase |
 |---|---|
-| Python rule DSL for governance (ADR 001) | 0 |
+| `Decision[M]` substrate with `Monoid[M]` protocol (ADR 004) | 0 |
+| `M = list[Violation]` Governance instantiation (ADR 005) | 0 |
 | Pydantic `Proposal`/`Contract` types | 0 |
 | Convention-based `Contract` abstraction barrier | 0 |
 | Local-first dev loop | 0 |
 | Annotate categorical correspondence in docstrings | 0 |
 | Property tests for Learner laws | 1 |
 | Hypothesis tests for governance conjunctivity | 1 |
+| Monoid-law property tests per registered `Monoid[M]` (ADR 005) | 1 |
 | Polars/DuckDB local feature engineering | 1 |
 | Append-only observation table; SQL-derived state | 2 |
 | Pydantic ↔ dbt source-contract generation | 2 |
-| Snowpark vectorised UDF for governance | 2 |
+| Snowpark vectorised UDF parameterised by `M` (ADR 004) | 2 |
+| Decision-payload `(admitted, m)` persisted on contract row | 2 |
 | Cortex extraction at the boundary, with budget guard | 2 |
 | Lightweight Python harness as orchestrator | 2 |
 | Defer Dagster | 2 (deferral) → 3 (adoption) |
 | Rejection analytics tables (queryable basics) | 2 |
 | Dagster Software-Defined Assets | 3 |
 | Asset checks for governance invariants | 3 |
+| Asset checks for guardrail-distribution stability (ADR 005) | 3 |
+| First production Guardrail (additive risk score) (ADR 005) | 3 |
+| Joint Governance × Guardrail product-monoid admission | 3 |
 | Cortex spend asset checks | 3 |
 | Rejection analytics surfaced for ops | 3 |
 | Cortex-based rejection-letter generation | 3 |
-| Versioned policy bundles | 4 |
-| Per-jurisdiction governance UDFs by composition | 4 |
+| Versioned decision-release bundles (governance + guardrail) | 4 |
+| Per-jurisdiction UDFs by composition | 4 |
+| DMN/FEEL authoring surface (ADR 004 S2) | 4 |
+| Python ↔ DMN round-trip equivalence test | 4 |
 | Replay infrastructure | 4 |
 | Two-person rule on regulatory bundles | 4 |
 | Distribution-valued learner outputs | 5 |
