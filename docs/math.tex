@@ -467,7 +467,161 @@ $\varepsilon_P(g) \models \mathrm{governance}(g)$.
 \Cref{thm:static} is the categorical content of the abstraction
 barrier on $\Contract(P)$: the impossibility of constructing a
 contract outside of $\Validate$ becomes a property of the type system
-rather than a runtime invariant.
+rather than a runtime invariant. The development of this section
+treats decisions as valued in $\mathbf{1} + \Violation$ — a binary
+admit/violate alternative; \cref{sec:decisions} generalises this
+to decisions valued in an arbitrary monoid, and recovers the present
+treatment as the case of the free monoid on violations.
+
+\section{Decision Systems Parameterised by a Monoid}
+\label{sec:decisions}
+
+The development of \cref{sec:governance,sec:validation} treats the
+carrier of the governance comonad as a list of \emph{rules} valued
+in $\mathbf{1} + \Violation$. This is the case the production
+implementation most closely tracks. The categorical structure is
+considerably more general, however, and recognising the
+generalisation unifies governance with adjacent industrial
+notions — particularly the \emph{guardrails} of insurance
+underwriting, in which decisions yield risk scores, severity flags,
+or graded recommendations rather than binary admit/reject outcomes.
+
+\subsection{Decisions valued in a monoid}
+
+\begin{definition}[Decision]\label{def:decision}
+Let $(M, \otimes_M, e_M)$ be a monoid in $\Set$. A
+\emph{decision valued in $M$} on proposals of type $P$ is a
+function $d \colon P \to M$.
+\end{definition}
+
+\begin{definition}[Decision system]\label{def:decision-system}
+A \emph{decision system} on $P$ valued in $M$ is a finite list
+$D = [d_1, \ldots, d_n]$ of decisions $d_i \colon P \to M$. Its
+\emph{aggregate} is the decision
+\[
+\langle D \rangle(p) := d_1(p) \otimes_M \cdots \otimes_M d_n(p),
+\]
+with $\langle [\,] \rangle(p) := e_M$.
+\end{definition}
+
+The set of decision systems on $P$ valued in $M$, denoted
+$\mathcal{D}_M(P)$, is itself a monoid under list concatenation
+with identity $[\,]$ — exactly as in \cref{lem:governance-monoid}.
+The Env comonad $W_{\mathcal{D}_M(P)}$ carries a decision system
+as context for a focal proposal, and the co-Kleisli arrow
+\[
+\mathrm{eval}_M
+   \colon W_{\mathcal{D}_M(P)} P \longrightarrow M,
+\quad
+\mathrm{eval}_M(D, p) := \langle D \rangle(p),
+\]
+evaluates the system on the focal proposal.
+
+\subsection{Admissibility}
+
+\begin{definition}[Admissibility]\label{def:admissibility}
+An \emph{admissibility predicate} for decisions valued in $M$ is a
+map $\mathrm{adm} \colon M \to \{\bot, \top\}$.
+\end{definition}
+
+\begin{definition}[Generalised validation]\label{def:validate-M}
+Let $\Contract_M(P)$ be a type with private data constructor.
+Define
+\[
+\Validate_{M, \mathrm{adm}}
+  \colon W_{\mathcal{D}_M(P)} P
+  \longrightarrow M + \Contract_M(P)
+\]
+to return $\inr(\Contract_M(p))$ when
+$\mathrm{adm}(\langle D \rangle(p))$ holds and
+$\inl(\langle D \rangle(p))$ otherwise.
+\end{definition}
+
+\begin{theorem}[Generalised static admissibility]\label{thm:static-M}
+If $\Contract_M(P)$ has its data constructor hidden and is exposed
+only via $\Validate_{M, \mathrm{adm}}$, then for every
+$c \in \Contract_M(P)$ there exist a decision system
+$D \in \mathcal{D}_M(P)$ and a proposal $p \in P$ such that
+$\mathrm{adm}(\langle D \rangle(p)) = \top$.
+\end{theorem}
+
+\begin{proof}
+Each $c$ arises as the right summand of
+$\Validate_{M, \mathrm{adm}}(D, p)$ for some $(D, p)$, which by
+\cref{def:validate-M} occurs exactly when
+$\mathrm{adm}(\langle D \rangle(p))$ holds.
+\end{proof}
+
+\Cref{thm:static-M} subsumes \cref{thm:static}: it is
+$\mathrm{adm}$, not the structure of $M$, that gates the
+abstraction barrier on $\Contract$.
+
+\subsection{Worked instances}
+
+\paragraph*{Governance.}
+Take $M := \mathrm{List}(\Violation)$ with $\otimes = +\!\!+$ and
+$e = [\,]$, and $\mathrm{adm}(m) := (m = [\,])$. A decision $d
+\colon P \to M$ takes the form $p \mapsto [\,]$ on success and
+$p \mapsto [v]$ on failure with violation $v$. The aggregate is
+the concatenation of all violations; $\mathrm{adm}$ asks whether
+the resulting list is empty. This recovers
+\cref{def:governance,lem:conjunctive,thm:static} as the present
+specialisation.
+
+\paragraph*{Guardrails (additive risk score).}
+Take $M := \mathbb{R}_{\geq 0}$ with $\otimes = +$ and $e = 0$,
+and $\mathrm{adm}(s) := (s < s_{\max})$ for a fixed threshold
+$s_{\max}$. Each decision contributes a non-negative risk
+increment to a proposal; the aggregate is the total risk;
+admission requires the total to lie below the threshold. The
+carried monoid is abelian, so reordering decisions is
+behaviourally invisible — useful for parallel evaluation across
+warehouse partitions.
+
+\paragraph*{Guardrails (score and worst severity).}
+Take $M := \mathbb{R}_{\geq 0} \times \Sigma$ for a totally
+ordered severity lattice $\Sigma$ with bottom $\bot$, with
+$\otimes((s_1, \sigma_1), (s_2, \sigma_2)) := (s_1 + s_2,\,
+\max(\sigma_1, \sigma_2))$ and $e := (0, \bot)$. Set
+$\mathrm{adm}((s, \sigma)) := (s < s_{\max}) \wedge (\sigma <
+\sigma_{\max})$. A single critical-severity decision now refuses
+the contract regardless of total score; soft-but-numerous
+decisions refuse it via the score threshold.
+
+\paragraph*{Joint governance and guardrails.}
+Take the product monoid $M := \mathrm{List}(\Violation) \times
+\mathbb{R}_{\geq 0}$ with componentwise operations. Set
+$\mathrm{adm}((vs, s)) := (vs = [\,]) \wedge (s < s_{\max})$. A
+proposal is admitted iff no hard rule has fired \emph{and} its
+risk aggregate is within budget. The decision system holds both
+kinds of rule on equal algebraic footing; only the admissibility
+predicate distinguishes them. The framework requires neither
+prior commitment to which rules are ``hard'' nor architectural
+separation between the two flavours.
+
+\subsection{Connection to industrial notations}
+
+The product-monoid construction of the previous paragraph is the
+categorical engine behind layered, scored decision-making in
+industrial settings. The OMG's Decision Model and Notation (DMN)
+expresses individual decisions as tables, with hit policies that
+correspond directly to choices of $M$: \texttt{Unique} is a
+partial function $P \rightharpoonup M$ for arbitrary $M$;
+\texttt{Collect} with sum aggregator is $M = \mathbb{R}$;
+\texttt{Output Order} is $M = \mathrm{List}(O)$ for some output
+type $O$. Decision Requirements Diagrams compose tables along the
+same lines as $\langle - \rangle$: a final decision aggregates
+the outputs of upstream decisions in a DAG, and the DAG's
+evaluation is a co-Kleisli composite. The Friendly Enough
+Expression Language (FEEL) supplies cell-level expressions;
+semantically these are total functions on the proposal record
+into $M$.
+
+We do not pursue a formal categorical translation of DMN here.
+We note that the alignment is structurally tight: the
+monoid-parameterised formulation of this section is a faithful
+semantics for DMN's hit-policy algebra, and DMN tables are a
+notation for individual decisions in $\mathcal{D}_M(P)$.
 
 \section{Layered Regulation}
 \label{sec:layered}
