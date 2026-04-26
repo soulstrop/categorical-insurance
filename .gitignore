@@ -20,3 +20,7 @@ docs/*.zip
 *.out
 *.toc
 *.synctex.gz
+
+# Pandoc/mermaid generated artifacts
+docs/ARCHITECTURE.html
+mermaid-filter.err
