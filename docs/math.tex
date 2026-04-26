@@ -5,18 +5,15 @@
 % or
 %   pdflatex math.tex (twice, for cross-references)
 %
-% Required packages: amsmath, amssymb, amsthm, mathtools, tikz, tikz-cd,
-%                    geometry, microtype, hyperref, cleveref.
-% TeX Live 2020+ should suffice.
+% Required packages: IEEEtran, amsmath, amssymb, amsthm, mathtools, tikz,
+%                    tikz-cd, microtype, hyperref, cleveref.
 
-\documentclass[11pt]{amsart}
+\documentclass[journal,10pt]{IEEEtran}
 
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
 \usepackage{amsmath, amssymb, amsthm, mathtools}
 \usepackage{tikz}
 \usepackage{tikz-cd}
-\usepackage[margin=1.15in]{geometry}
 \usepackage{microtype}
 \usepackage{hyperref}
 \usepackage[capitalise,noabbrev]{cleveref}
@@ -31,7 +28,7 @@
 \setlength{\emergencystretch}{2em}
 
 \theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
+\newtheorem{theorem}{Theorem}
 \newtheorem{proposition}[theorem]{Proposition}
 \newtheorem{lemma}[theorem]{Lemma}
 
@@ -69,75 +66,98 @@
 \newcommand{\Validate}{\mathsf{validate}}
 
 \title{Categorical Insurance: \\ Learners and Comonadic Governance}
-\author{}
-\date{\today}
+
+\author{%
+  J.~Michael~Constans
+  and~Claude~Opus~4.7%
+  \thanks{J. M. Constans is with Feature Software, LLC. E-mail:
+  \href{mailto:constans@gmail.com}{\texttt{constans@gmail.com}}.}%
+  \thanks{Claude Opus 4.7 is a large language model developed by
+  Anthropic (model identifier \texttt{claude-opus-4-7}). This paper was
+  prepared through interactive collaboration with that model:
+  the human author directed the scope, theorems, and exposition; the
+  model drafted prose, formalised statements, and produced the
+  \texttt{tikz-cd} diagrams under continuous human review.}%
+}
+
+\markboth{Preprint --- Feature Software, LLC}%
+{Constans and Claude: Categorical Insurance --- Learners and Comonadic Governance}
 
 \begin{document}
 
-\begin{abstract}
-We describe the mathematical structure underlying
-\href{https://github.com/soulstrop/categorical-insurance}{\texttt{categorical\-insurance}},
-a Haskell library for machine-learning--driven design of insurance
-contracts. \emph{Learners}, in the sense of Fong--Spivak--Tuy\'eras
-\cite{FongSpivakTuyeras} and Cruttwell--Gavranovi\'c--Ghani--Wilson--Zanasi
-\cite{CGGWZ}, appear as morphisms in a symmetric monoidal category
-that uniformly captures both classical actuarial estimators (we exhibit
-B\"uhlmann credibility) and gradient-based methods (we exhibit linear
-regression). \emph{Governance} is carried by the Env comonad over a
-monoid of rule sets, so federal, state, and internal regulations
-compose via the monoid operation. Contract construction is a co-Kleisli
-arrow factoring through this comonadic context, making the rule
-\emph{``no contract may be made that violates governance''} a static
-guarantee rather than a runtime convention.
-\end{abstract}
-
 \maketitle
 
-\tableofcontents
+\begin{abstract}
+We describe the mathematical structure underlying a Haskell library
+for machine-learning--driven design of insurance contracts. Learners,
+in the sense of Fong--Spivak--Tuy\'eras and
+Cruttwell--Gavranovi\'c--Ghani--Wilson--Zanasi, appear as morphisms in
+a symmetric monoidal category that uniformly captures both classical
+actuarial estimators (we exhibit B\"uhlmann credibility) and
+gradient-based methods (we exhibit linear regression). Governance is
+carried by the Env comonad over a monoid of rule sets, so federal,
+state, and internal regulations compose via the monoid operation.
+Contract construction is a co-Kleisli arrow factoring through this
+comonadic context, making the rule \emph{``no contract may be made
+that violates governance''} a static guarantee rather than a runtime
+convention. Layered regulation reduces, by conjunctivity of
+satisfaction over the monoid sum, to a single co-Kleisli composite,
+and switching jurisdiction becomes a substitution at the carrier
+level that is functorial in $\Mon(\Set) \to \CoMon(\Set)$.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Category theory, comonad, parametric learner, lens, governance,
+insurance pricing, B\"uhlmann credibility, gradient descent, Para
+construction, co-Kleisli.
+\end{IEEEkeywords}
 
 \section{Introduction}
 \label{sec:intro}
 
-The two recurring problems in machine-learning--driven insurance
-pricing are heterogeneity and governance. Classical actuarial methods
-(credibility theory, generalised linear models, Kalman filters) and
-modern machine learning (gradient-trained networks, kernel methods)
-are usually treated as disjoint toolkits, even though they share a
-common operational structure: state, prediction, update. At the same
-time, insurance contracts cannot be written freely; they must comply
-with regulatory, internal, and contractual constraints that themselves
-compose. Treating governance as a runtime check bolted onto a model
-leaves open the possibility of constructing contracts that should
-never have existed.
+\IEEEPARstart{T}{he} two recurring problems in
+machine-learning--driven insurance pricing are heterogeneity and
+governance. Classical actuarial methods (credibility theory,
+generalised linear models, Kalman filters) and modern machine learning
+(gradient-trained networks, kernel methods) are usually treated as
+disjoint toolkits, even though they share a common operational
+structure: state, prediction, update. At the same time, insurance
+contracts cannot be written freely; they must comply with regulatory,
+internal, and contractual constraints that themselves compose.
+Treating governance as a runtime check bolted onto a model leaves
+open the possibility of constructing contracts that should never have
+existed.
 
-This document gives a mathematical account of the answer pursued in
-\texttt{categorical\-insurance}: \emph{learners are morphisms in a
-symmetric monoidal category, governance is a comonadic context, and
-contracts are the audited outputs of co-Kleisli pipelines.}
+This paper gives a mathematical account of one answer: \emph{learners
+are morphisms in a symmetric monoidal category, governance is a
+comonadic context, and contracts are the audited outputs of co-Kleisli
+pipelines.} The development is exhibited in the
+\texttt{categorical-insurance} library; a working implementation in
+Haskell is available
+at~\href{https://github.com/soulstrop/categorical-insurance}%
+{\texttt{github.com/soulstrop/categorical\-insurance}}.
 
-\paragraph{Notation.}
+\paragraph*{Notation.}
 We work informally in $\Set$. Categories are denoted $\mathcal{C},
 \mathcal{D}$; specific categories of interest in
 \textsf{sans-serif}. We write $\otimes$ for the monoidal product (in
 $\Set$, the Cartesian product $\times$), $\mathbf{1}$ for the
 monoidal unit, and $\inl, \inr$ for the coproduct injections.
 
-\section{The category of learners}
+\section{The Category of Learners}
 \label{sec:learners}
 
 \begin{definition}[Learner]\label{def:learner}
-A \emph{learner} from $A$ to $B$ is an equivalence class of quadruples
-\[
-(P,\ I,\ U,\ R)
-\]
-where $P$ is a set (the \emph{state} or \emph{parameter space}) and
+A \emph{learner} from $A$ to $B$ is an equivalence class of
+quadruples $(P, I, U, R)$ where $P$ is a set (the \emph{state} or
+\emph{parameter space}) and
 \begin{align*}
 I &\colon P \times A \longrightarrow B
-   && \text{(implementation)},\\
+   && \text{(implementation),}\\
 U &\colon P \times A \times B \longrightarrow P
-   && \text{(update)},\\
+   && \text{(update),}\\
 R &\colon P \times A \times B \longrightarrow A
-   && \text{(request)}.
+   && \text{(request).}
 \end{align*}
 Two quadruples $(P, I, U, R)$ and $(P', I', U', R')$ are equivalent
 if there is a bijection $\varphi \colon P \to P'$ intertwining all
@@ -165,26 +185,32 @@ P_{g \circ f}
 I_{g \circ f}((p, q), a)
    &= I_g\bigl(q,\ I_f(p, a)\bigr), \\
 U_{g \circ f}((p, q), a, c)
-   &= \bigl(U_f(p, a, R_g(q, I_f(p, a), c)),\ U_g(q, I_f(p, a), c)\bigr), \\
+   &= \bigl(U_f(p, a, b^*),\ U_g(q, I_f(p, a), c)\bigr), \\
 R_{g \circ f}((p, q), a, c)
-   &= R_f\bigl(p, a, R_g(q, I_f(p, a), c)\bigr).
+   &= R_f\bigl(p, a, b^*\bigr),
 \end{align*}
+where $b^* := R_g(q, I_f(p, a), c)$ is the target produced by the
+downstream request map.
 \end{definition}
 
-The forward direction reads as the composite
-\[
-\begin{tikzcd}[column sep=large, row sep=normal]
+The forward direction reads as the composite of \cref{fig:learner-fwd}.
+The request map of $g$ produces, given the prediction
+$b = I_f(p, a)$ and the desired output $c$, a target $b^*$ for $f$;
+the update of $f$ then trains against this internal target rather
+than against $c$ directly. This is what makes $\Learn$ a category
+rather than a mere semigroup.
+
+\begin{figure}[!t]
+\centering
+$\begin{tikzcd}[column sep=large, row sep=normal]
 A \arrow[r, "{I_f(p,\,-)}"]
   \arrow[rr, "{I_{g \circ f}((p,q),\,-)}"', bend right=22]
 & B \arrow[r, "{I_g(q,\,-)}"]
 & C
-\end{tikzcd}
-\]
-while the request map of $g$ produces, given the prediction
-$b = I_f(p, a)$ and the desired output $c$, a target
-$b^* := R_g(q, b, c)$ for $f$; the update of $f$ then trains against
-this internal target rather than against $c$ directly. This is what
-makes $\Learn$ a category rather than a mere semigroup.
+\end{tikzcd}$
+\caption{Forward pass of $g \circ f$.}
+\label{fig:learner-fwd}
+\end{figure}
 
 \begin{theorem}[\cite{FongSpivakTuyeras,CGGWZ}]\label{thm:learn-cat}
 Composition in \cref{def:learner-comp} is associative and unital with
@@ -194,8 +220,9 @@ objects are sets and whose hom-sets are $\Learn(A, B)$.
 
 \begin{definition}[Parallel product]\label{def:parallel}
 For $f \in \Learn(A, B)$ and $g \in \Learn(C, D)$, the parallel
-product $f \otimes g \in \Learn(A \times C, B \times D)$ has parameter
-space $P_f \times P_g$ and acts componentwise on each factor.
+product $f \otimes g \in \Learn(A \times C, B \times D)$ has
+parameter space $P_f \times P_g$ and acts componentwise on each
+factor.
 \end{definition}
 
 \begin{theorem}[\cite{CGGWZ}]
@@ -212,7 +239,7 @@ factors through the bicategory $\Para(\Optic)$ of parametrised optics
 directly at the disposal of learner state.
 \end{remark}
 
-\section{Two instances}
+\section{Two Instances}
 \label{sec:instances}
 
 The point of \cref{thm:learn-cat,thm:smc} is that wildly different
@@ -224,11 +251,12 @@ mediation.
 \label{sec:credibility}
 
 Let $X \sim \mathcal{N}(\theta, \sigma^2)$ with $\sigma^2$ known and
-prior $\theta \sim \mathcal{N}(\mu_0,\ 1/\kappa_0)$. The Normal--Normal
-conjugate posterior after observation $x$ has parameters
+prior $\theta \sim \mathcal{N}(\mu_0,\ 1/\kappa_0)$. The
+Normal--Normal conjugate posterior after observation $x$ has
+parameters
 \[
 \kappa_1 = \kappa_0 + \frac{1}{\sigma^2},
-\qquad
+\quad
 \mu_1 = \frac{\kappa_0\, \mu_0 + x/\sigma^2}{\kappa_1}.
 \]
 
@@ -246,14 +274,14 @@ U((\mu, \kappa),\ *,\ x)
 R((\mu, \kappa),\ *,\ x) &= *.
 \end{align*}
 
-\begin{proposition}[B\"uhlmann credibility falls out of the recursion]
+\begin{proposition}[Credibility from the recursion]
 \label{prop:buhlmann}
 After $n$ observations $x_1, \ldots, x_n$ the implementation returns
 \[
 I = Z \cdot \bar{x} + (1 - Z) \cdot \mu_0,
-\qquad
+\quad
 \bar{x} := \tfrac{1}{n} \textstyle\sum_i x_i,
-\qquad
+\quad
 Z := \frac{n}{n + \kappa_0\, \sigma^2}.
 \]
 \end{proposition}
@@ -262,7 +290,7 @@ Z := \frac{n}{n + \kappa_0\, \sigma^2}.
 Induct on $n$. The recursion $\kappa_n = \kappa_0 + n/\sigma^2$ is
 solved in closed form, and the recursive $\mu_n$ rearranges to the
 stated convex combination, with $Z$ identifying as the classical
-credibility factor of \cite{BuhlmannGisler}.
+B\"uhlmann credibility factor of \cite{BuhlmannGisler}.
 \end{proof}
 
 \subsection{Linear regression as a gradient learner}
@@ -289,59 +317,64 @@ abstraction is doing real work: heterogeneity at the algorithmic
 level disappears at the categorical one.
 \end{remark}
 
-\section{Comonadic governance}
+\section{Comonadic Governance}
 \label{sec:governance}
 
 \subsection{The Env comonad over a monoid}
 
 \begin{definition}[Env comonad]\label{def:env-comonad}
-For any monoid $(M, \otimes_M, e_M)$ in $\Set$, the \emph{Env comonad}
-on $\Set$ is the endofunctor $W_M(A) := M \times A$ with counit
-$\varepsilon \colon W_M \Rightarrow \id_\Set$ and comultiplication
-$\delta \colon W_M \Rightarrow W_M W_M$ given on components by
+For any monoid $(M, \otimes_M, e_M)$ in $\Set$, the \emph{Env
+comonad} on $\Set$ is the endofunctor $W_M(A) := M \times A$ with
+counit $\varepsilon \colon W_M \Rightarrow \id_\Set$ and
+comultiplication $\delta \colon W_M \Rightarrow W_M W_M$ given on
+components by
 \[
 \varepsilon_A(m, a) = a,
-\qquad
+\quad
 \delta_A(m, a) = (m,\ (m, a)).
 \]
 \end{definition}
 
-The comonad axioms are the commuting diagrams below: the two left
-diagrams express that $\varepsilon$ is a counit for $\delta$, and the
-right diagram expresses coassociativity of $\delta$.
-\begin{equation}
-\label{eq:comonad-axioms}
-\begin{tikzcd}[column sep=normal, row sep=large, ampersand replacement=\&]
+The comonad axioms are the commuting diagrams of
+\cref{fig:comonad-axioms}: the two upper diagrams express that
+$\varepsilon$ is a counit for $\delta$, and the lower diagram
+expresses coassociativity. For $W = W_M$ each square is an immediate
+unfolding of \cref{def:env-comonad} together with the unit and
+associativity laws of the monoid $M$.
+
+\begin{figure*}[!t]
+\centering
+$\begin{tikzcd}[column sep=normal, row sep=large, ampersand replacement=\&]
 W A \arrow[r, "\delta_A"] \arrow[dr, equal] \&
 W W A \arrow[d, "\varepsilon_{W A}"] \\
 \& W A
-\end{tikzcd}
-\quad
-\begin{tikzcd}[column sep=normal, row sep=large, ampersand replacement=\&]
+\end{tikzcd}$
+\qquad
+$\begin{tikzcd}[column sep=normal, row sep=large, ampersand replacement=\&]
 W A \arrow[r, "\delta_A"] \arrow[dr, equal] \&
 W W A \arrow[d, "W \varepsilon_A"] \\
 \& W A
-\end{tikzcd}
-\quad
-\begin{tikzcd}[column sep=large, row sep=large, ampersand replacement=\&]
+\end{tikzcd}$
+\qquad
+$\begin{tikzcd}[column sep=large, row sep=large, ampersand replacement=\&]
 W A \arrow[r, "\delta_A"] \arrow[d, "\delta_A"'] \&
 W W A \arrow[d, "W \delta_A"] \\
 W W A \arrow[r, "\delta_{W A}"'] \&
 W W W A
-\end{tikzcd}
-\end{equation}
-For $W = W_M$ each square is an immediate unfolding of
-\cref{def:env-comonad} together with the unit and associativity laws
-of the monoid $M$.
+\end{tikzcd}$
+\caption{Comonad axioms for $W$: left counit (left), right counit
+(centre), and coassociativity (right).}
+\label{fig:comonad-axioms}
+\end{figure*}
 
 \begin{remark}[Functoriality of $W_{(-)}$]\label{rem:functoriality}
-The assignment $M \mapsto W_M$ extends to a functor
-$W_{(-)} \colon \Mon(\Set) \to \CoMon(\Set)$ from the category of
-monoids in $\Set$ to the category of comonads on $\Set$: a monoid
-homomorphism $h \colon M \to N$ induces a comonad morphism
-$W_M \Rightarrow W_N$ given pointwise by $h \times \id$. This is the
-sense in which choosing a richer carrier monoid (more rules, layered
-context) is functorial in the carrier itself.
+The assignment $M \mapsto W_M$ extends to a functor $W_{(-)}$ from
+the category $\Mon(\Set)$ of monoids in $\Set$ to the category
+$\CoMon(\Set)$ of comonads on $\Set$: a monoid homomorphism
+$h \colon M \to N$ induces a comonad morphism $W_M \Rightarrow W_N$
+given pointwise by $h \times \id$. This is the sense in which
+choosing a richer carrier monoid (more rules, layered context) is
+functorial in the carrier itself.
 \end{remark}
 
 \subsection{Governance objects as a monoid}
@@ -390,46 +423,36 @@ lists of $G_1$ and $G_2$; the universal property ``every rule
 returns $\inl$'' distributes over concatenation.
 \end{proof}
 
-\section{Validation as a co-Kleisli arrow}
+\section{Validation as a Co-Kleisli Arrow}
 \label{sec:validation}
 
 Recall that the co-Kleisli category $\CoKl(W)$ of a comonad $W$ on
-$\mathcal{C}$ has the same objects as $\mathcal{C}$, while a
-morphism $A \to B$ in $\CoKl(W)$ is a map $W A \to B$ in
-$\mathcal{C}$. Composition lifts via $\delta$, and the identity at
-$A$ is $\varepsilon_A$.
+$\mathcal{C}$ has the same objects as $\mathcal{C}$, while a morphism
+$A \to B$ in $\CoKl(W)$ is a map $W A \to B$ in $\mathcal{C}$.
+Composition lifts via $\delta$, and the identity at $A$ is
+$\varepsilon_A$.
 
 Let $\Contract(P)$ be a type whose data constructor is private and
 whose only public introduction rule is the partial function
 \begin{equation}
 \label{eq:validate}
-\Validate \colon \Governed_P P \longrightarrow \mathrm{List}(\Violation) + \Contract(P).
+\Validate \colon \Governed_P P
+   \longrightarrow \mathrm{List}(\Violation) + \Contract(P).
 \end{equation}
 That is, $\Validate$ is a morphism
 $P \to \mathrm{List}(\Violation) + \Contract(P)$ in
-$\CoKl(\Governed_P)$. Its definition is to apply each rule in
-$\mathrm{governance}(g)$ to $\varepsilon(g)$, returning $\inr$ of the
-constructed contract if all rules pass and $\inl$ of the collected
-violations otherwise:
-\[
-\Validate(g) =
-\begin{cases}
-\inr(\Contract(\varepsilon(g)))
-   & \text{if } \varepsilon(g) \models \mathrm{governance}(g),\\
-\inl([v_1, \ldots, v_k])
-   & \text{otherwise, with the } v_i \text{ the failing rules' violations.}
-\end{cases}
-\]
+$\CoKl(\Governed_P)$. Concretely, $\Validate(g)$ applies each rule of
+$\mathrm{governance}(g)$ to $\varepsilon(g)$. When every rule returns
+$\inl(*)$ the focal proposal is wrapped as a contract; otherwise the
+collected failing-rule violations are returned in the left summand.
 
 \begin{theorem}[Static governance]\label{thm:static}
 Suppose $\Contract(P)$ has its data constructor hidden and is exposed
-only via $\Validate$. Then for every $c \in \Contract(P)$ there exists
-$g \in \Governed_P P$ with
-\[
-\varepsilon_P(g) \models \mathrm{governance}(g).
-\]
-That is: every contract that exists has been admitted by some
-governance environment that it satisfies.
+only via $\Validate$. Then for every $c \in \Contract(P)$ there
+exists $g \in \Governed_P P$ with
+$\varepsilon_P(g) \models \mathrm{governance}(g)$. That is: every
+contract that exists has been admitted by some governance environment
+that it satisfies.
 \end{theorem}
 
 \begin{proof}
@@ -437,7 +460,7 @@ By construction, each value $c \in \Contract(P)$ arises as the
 right summand of $\Validate(g)$ for some $g \in \Governed_P P$.
 By \cref{eq:validate}, this is precisely the case in which every
 rule of $\mathrm{governance}(g)$ returns $\inl(*)$ on
-$\varepsilon_P(g)$, i.e. when
+$\varepsilon_P(g)$, i.e.\ when
 $\varepsilon_P(g) \models \mathrm{governance}(g)$.
 \end{proof}
 
@@ -446,50 +469,55 @@ barrier on $\Contract(P)$: the impossibility of constructing a
 contract outside of $\Validate$ becomes a property of the type system
 rather than a runtime invariant.
 
-\section{Layered regulation}
+\section{Layered Regulation}
 \label{sec:layered}
 
-In practice, governance is layered. We define
-\begin{align*}
-\Governance_{\mathrm{fed}}
-  &:= [\text{protected-class rule},\ \text{ACA loss-ratio floor},\ \ldots], \\
-\Governance_{\mathrm{CA}}
-  &:= [\text{Prop 103 permitted factors},\ \text{minimum auto liability},\ \ldots], \\
-\Governance_{\mathrm{int}}
-  &:= [\text{consent},\ \text{rate stability},\ \text{explainability floor},\ \text{reinsurance}], \\
-\Governance_{\mathrm{base}}
-  &:= [\text{positive premium},\ \text{loss-ratio cap},\ \text{coverage cap}],
-\end{align*}
-and form the regime
-\[
-\Governance_{\mathrm{CA-regime}}
-   := \Governance_{\mathrm{fed}}
-       \oplus \Governance_{\mathrm{CA}}
-       \oplus \Governance_{\mathrm{int}}
-       \oplus \Governance_{\mathrm{base}}.
-\]
+In practice, governance is layered. We assemble four bundles:
+$\Governance_{\mathrm{fed}}$ collects federal rules (protected-class
+rating prohibitions, ACA loss-ratio floor, etc.);
+$\Governance_{\mathrm{CA}}$ collects California rules (Prop~103
+permitted auto factors, minimum auto liability);
+$\Governance_{\mathrm{int}}$ collects internal guardrails (consent,
+rate stability, explainability, reinsurance cession); and
+$\Governance_{\mathrm{base}}$ collects basic underwriting hygiene
+(positive premium, loss-ratio cap, coverage cap). The composed
+\emph{California regime} is
+\begin{equation*}
+\begin{aligned}
+\Governance^{\mathrm{CA}} := {}
+  & \Governance_{\mathrm{fed}}
+        \oplus \Governance_{\mathrm{CA}} \\
+  & \oplus \Governance_{\mathrm{int}}
+        \oplus \Governance_{\mathrm{base}}.
+\end{aligned}
+\end{equation*}
 
-By \cref{lem:conjunctive}, $p \models \Governance_{\mathrm{CA-regime}}$
-iff $p$ satisfies each layer; by \cref{thm:static}, the resulting
-contract is then admissible under the full layered regime. The
-end-to-end pipeline is the composite of co-Kleisli arrows:
-\[
-\begin{tikzcd}[column sep=large, row sep=normal, ampersand replacement=\&]
+By \cref{lem:conjunctive},
+$p \models \Governance^{\mathrm{CA}}$ iff $p$ satisfies
+each layer; by \cref{thm:static}, the resulting contract is then
+admissible under the full layered regime. The end-to-end pipeline is
+the composite of co-Kleisli arrows shown in
+\cref{fig:layered-pipeline}.
+
+\begin{figure}[!t]
+\centering
+$\begin{tikzcd}[column sep=large, row sep=normal, ampersand replacement=\&]
 P
-  \arrow[r, "{(\Governance_{\mathrm{CA\text{-}regime}},\ -)}"]
+  \arrow[r, "{(\Governance^{\mathrm{CA}},\ -)}"]
 \& \Governed_P P
-  \arrow[r, "\Validate"]
+  \arrow[d, "\Validate"]
+\\
 \& \mathrm{List}(\Violation) + \Contract(P)
-\end{tikzcd}
-\]
-where the first arrow injects the proposal into the comonadic context
-carrying the layered governance, and the second is
-\cref{eq:validate}.
+\end{tikzcd}$
+\caption{Layered validation pipeline: the proposal is injected into
+the comonadic context carrying the composed governance, then validated.}
+\label{fig:layered-pipeline}
+\end{figure}
 
-Switching jurisdiction is a single substitution
-($\Governance_{\mathrm{CA}} \mapsto \Governance_{\mathrm{NY}}$) at
-the carrier level. By \cref{rem:functoriality} this is functorial in
-the carrier monoid: choices of governance form a diagram in
+Switching jurisdiction means substituting
+$\Governance_{\mathrm{NY}}$ for $\Governance_{\mathrm{CA}}$ at the
+carrier level. By \cref{rem:functoriality} this is functorial in the
+carrier monoid: choices of governance form a diagram in
 $\Mon(\Set)$, lifted by $W_{(-)}$ to a diagram in $\CoMon(\Set)$, and
 $\Validate$ is natural with respect to this lifting.
 
@@ -498,15 +526,15 @@ $\Validate$ is natural with respect to this lifting.
 
 Three directions extend the present work.
 
-\paragraph{Para alignment.}
+\paragraph*{Para alignment.}
 Sequential composition of learners embeds into the bicategory of
 optics via the Para construction
 \cite{CapucciGavranovicHedgesRischel}; making this explicit puts lens
 combinators (composition lemmas, profunctor optics) directly at the
-disposal of learner state, and identifies the request map $R$ with the
-optic's residual.
+disposal of learner state, and identifies the request map $R$ with
+the optic's residual.
 
-\paragraph{Probabilistic outputs.}
+\paragraph*{Probabilistic outputs.}
 Lifting the codomain of $I$ from a point estimate $b \in B$ to a
 distribution over $B$ allows governance to reason about posterior
 uncertainty rather than only the mean. The Giry monad on $\Set$
@@ -514,42 +542,46 @@ supplies the categorical setting, and rules can then phrase
 constraints such as ``the expected loss has variance below
 $\sigma^2_{\max}$'' instead of point estimates.
 
-\paragraph{Layered comonads.}
+\paragraph*{Layered comonads.}
 The composition in \cref{sec:layered} happens at the parameter level
 of a fixed comonad $W_{\Governance(P)}$. A genuine comonad
-\emph{transformer} would let governance regimes nest as comonad layers
-(federal $\rhd$ state $\rhd$ product line), so that re-audit at each
-layer is itself a co-Kleisli arrow over a layered comonad. This is
-the natural place at which the comonadic structure of $\Governed$
-begins to do work beyond what its Env-monoid carrier alone provides.
+\emph{transformer} would let governance regimes nest as comonad
+layers (federal $\rhd$ state $\rhd$ product line), so that re-audit
+at each layer is itself a co-Kleisli arrow over a layered comonad.
+This is the natural place at which the comonadic structure of
+$\Governed$ begins to do work beyond what its Env-monoid carrier
+alone provides.
 
-\begin{thebibliography}{9}
+\begin{thebibliography}{1}
 
 \bibitem{FongSpivakTuyeras}
-B.~Fong, D.~I.~Spivak, R.~Tuy\'eras.
-\newblock Backprop as functor: A compositional perspective on supervised learning.
-\newblock arXiv:1711.10455, 2017.
+B.~Fong, D.~I.~Spivak, and R.~Tuy\'eras,
+``Backprop as functor: A compositional perspective on supervised
+learning,''
+\emph{arXiv preprint arXiv:1711.10455}, 2017.
 
 \bibitem{CGGWZ}
-G.~S.~H.~Cruttwell, B.~Gavranovi\'c, N.~Ghani, P.~Wilson, F.~Zanasi.
-\newblock Categorical foundations of gradient-based learning.
-\newblock arXiv:2103.01931, 2021.
+G.~S.~H.~Cruttwell, B.~Gavranovi\'c, N.~Ghani, P.~Wilson, and
+F.~Zanasi,
+``Categorical foundations of gradient-based learning,''
+\emph{arXiv preprint arXiv:2103.01931}, 2021.
 
 \bibitem{CapucciGavranovicHedgesRischel}
-M.~Capucci, B.~Gavranovi\'c, J.~Hedges, E.~Rischel.
-\newblock Towards foundations of categorical cybernetics.
-\newblock arXiv:2105.06332, 2021.
+M.~Capucci, B.~Gavranovi\'c, J.~Hedges, and E.~Rischel,
+``Towards foundations of categorical cybernetics,''
+\emph{arXiv preprint arXiv:2105.06332}, 2021.
 
 \bibitem{BuhlmannGisler}
-H.~B\"uhlmann, A.~Gisler.
-\newblock \emph{A Course in Credibility Theory and its Applications}.
-\newblock Universitext. Springer, 2005.
+H.~B\"uhlmann and A.~Gisler,
+\emph{A Course in Credibility Theory and its Applications},
+ser.~Universitext.\hskip 1em plus 0.5em minus 0.4em\relax
+Springer, 2005.
 
 \bibitem{UustaluVene}
-T.~Uustalu, V.~Vene.
-\newblock Comonadic notions of computation.
-\newblock \emph{Electronic Notes in Theoretical Computer Science},
-203(5):263--284, 2008.
+T.~Uustalu and V.~Vene,
+``Comonadic notions of computation,''
+\emph{Electronic Notes in Theoretical Computer Science}, vol.~203,
+no.~5, pp.~263--284, 2008.
 
 \end{thebibliography}
 
