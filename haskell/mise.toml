@@ -1,0 +1,9 @@
+# Tool pins for the Haskell sketch. mise loads these when the cwd is
+# under haskell/.
+#
+# GHC version is managed by the hx CLI (raskell-io/hx) per the
+# project's existing convention; see hx.toml. If a mise-managed GHC
+# is preferred later, swap to a `ghc` entry here.
+
+[tools]
+hx = "0.6.0"
