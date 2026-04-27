@@ -48,6 +48,28 @@ locally.
 * A `Contract` constructor that is conventionally private (e.g., a
   single classmethod `Contract.from_validated(...)`); the
   abstraction barrier is documented in `CONTRIBUTING.md`.
+* **Public/internal API hygiene.** Module-level `__all__`,
+  leading-underscore convention for non-public names, and a
+  `CONTRIBUTING.md` rule that direct imports of `_Contract`
+  internals are a review-blocking offence. Python has no real
+  privacy; the categorical guarantee around `Contract` becomes a
+  social contract that the codebase has to enforce.
+* **Reproducibility-seed discipline.** Every stochastic operation
+  (synthetic-data generation, gradient steps, Hypothesis shrinks)
+  accepts and propagates a seed. No reliance on
+  process-default RNG.
+* **Engineering toolchain.** Ruff + black for formatting and
+  linting; `mypy --strict` on framework modules
+  (`learner/`, `governance/`, `decisions/`, `contract/`), looser on
+  examples; a lockfile via `uv` or `poetry`; `pre-commit` hooks;
+  GitHub Actions running `pytest` on every push.
+* **Test-as-documentation pattern.** Every example module exposes
+  a `demo()` function that is both a runnable tutorial and a CI
+  smoke test, mirroring the Haskell `Examples.Insurance.demo` /
+  `Examples.RiskScore.demoRisk` convention.
+* **License posture.** `LICENSE` (MIT, matching the Haskell
+  sketch), license field in `pyproject.toml`, and
+  `# SPDX-License-Identifier: MIT` on framework modules.
 * Synthetic data fixtures.
 * Tests in `pytest` covering happy paths and known violations.
 
@@ -67,8 +89,17 @@ locally.
 3. The `Proposal` and `Contract` types' fields are documented in
    one place (Pydantic + a one-page README).
 4. The categorical correspondence is annotated in code: each
-   public function carries a one-line docstring naming the Haskell
-   counterpart it implements.
+   public function under the framework modules carries a `math:`
+   reference (e.g., `# math: math.tex Definition 3`); a
+   `pre-commit`/CI check enforces the presence of an annotation on
+   every public function.
+5. CI on each push runs `pytest`, `ruff`, `mypy --strict` (on
+   framework modules), and a fresh-checkout install, all green.
+6. Every example module exports a `demo()` function that is
+   invoked under `pytest` as a smoke test.
+7. All stochastic operations accept and propagate a `seed`
+   parameter; running the suite twice with the same seed produces
+   bit-identical artefacts (where determinism is expected).
 
 ---
 
@@ -91,9 +122,25 @@ governance composition).
   * `compose(compose(h, g), f) ≡ compose(h, compose(g, f))` up to
     observable behaviour
   * `p ⊨ G1 + G2 ⇔ p ⊨ G1 ∧ p ⊨ G2` (conjunctivity, ADR 001)
-  * Monoid laws on the registered `Monoid[M]` instances
-    (associativity, left/right identity) — required for every new
-    monoid module per ADR 005.
+  * Monoid laws on every registered `Monoid[M]` instance —
+    associativity, left identity, right identity — required per
+    ADR 005 *for each instance separately*, not as a single
+    parametric assertion.
+* **Hypothesis strategy library** (`tests/strategies.py`):
+  named generators for `proposals()`, `rules()`, `risk_scores()`,
+  `decision_systems(monoid)` etc. Tests import strategies from
+  one module; ad-hoc per-test generation is review-blocking.
+* **Smoke tests for learner correctness** on a holdout, distinct
+  from the categorical property tests above. Each learner has a
+  test of the form "after training on this fixture, the
+  prediction error is below this tolerance" — catches `update`
+  arithmetic regressions that the property tests alone would not
+  notice. (This is *correctness on a fixture*, not *drift
+  monitoring*; the latter is Phase 3.)
+* **Performance sanity ceiling.** No single test takes more than
+  5 s; the full `pytest` suite completes in under 60 s on
+  commodity hardware. A coarse cap, not a budget; meant to catch
+  O(n) → O(n²) regressions, not to drive optimisation.
 * Validation outputs persisted as Parquet for downstream
   inspection.
 
@@ -103,7 +150,8 @@ governance composition).
 * Multi-jurisdiction policy bundles (Phase 4).
 
 **Done conditions.**
-1. Hypothesis-based property tests pass in CI.
+1. Hypothesis-based property tests pass in CI, with strategies
+   centralised in `tests/strategies.py`.
 2. The second learner is added with no surgery to the framework
    (only a new module).
 3. A real claims dataset (anonymised public, e.g., French TPL motor
@@ -111,6 +159,14 @@ governance composition).
 4. The `compose` and `parallel` operations are documented with
    short examples in the README, naming the `math.tex` theorems they
    instantiate.
+5. Each registered `Monoid[M]` has its own associativity and
+   identity property tests (not a single parametric assertion),
+   and they pass in CI.
+6. Each learner has at least one correctness smoke test on a
+   fixture; the test asserts a numeric tolerance (`pytest.approx`
+   or equivalent), not just non-failure.
+7. The full `pytest` suite runs under 60 s on commodity hardware
+   in CI; any single test exceeding 5 s fails the suite.
 
 ---
 
@@ -325,11 +381,19 @@ instrumental rather than incidental.
 | `M = list[Violation]` Governance instantiation (ADR 005) | 0 |
 | Pydantic `Proposal`/`Contract` types | 0 |
 | Convention-based `Contract` abstraction barrier | 0 |
+| Public/internal API hygiene (`__all__`, `_`-prefix, contributing rule) | 0 |
+| Reproducibility-seed discipline | 0 |
+| Engineering toolchain (ruff + black + mypy + lockfile + pre-commit + CI) | 0 |
+| Test-as-documentation: `demo()` per example module | 0 |
+| License + SPDX headers | 0 |
 | Local-first dev loop | 0 |
-| Annotate categorical correspondence in docstrings | 0 |
+| Categorical-correspondence annotation, CI-enforced | 0 |
 | Property tests for Learner laws | 1 |
 | Hypothesis tests for governance conjunctivity | 1 |
 | Monoid-law property tests per registered `Monoid[M]` (ADR 005) | 1 |
+| Centralised Hypothesis strategy library (`tests/strategies.py`) | 1 |
+| Per-learner correctness smoke tests on a fixture | 1 |
+| Performance sanity ceiling (5 s/test, 60 s suite) | 1 |
 | Polars/DuckDB local feature engineering | 1 |
 | Append-only observation table; SQL-derived state | 2 |
 | Pydantic ↔ dbt source-contract generation | 2 |
