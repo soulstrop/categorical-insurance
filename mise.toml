@@ -14,11 +14,19 @@
 
 [tasks.build]
 description = "Build everything across languages"
-depends     = ["build:haskell"]
+depends     = ["build:haskell", "build:python"]
 
 [tasks.test]
 description = "Run all tests across languages"
-depends     = ["test:haskell"]
+depends     = ["test:haskell", "test:python"]
+
+[tasks.lint]
+description = "Run all linters"
+depends     = ["lint:python"]
+
+[tasks.fmt]
+description = "Format all sources"
+depends     = ["fmt:python"]
 
 # -----------------------------------------------------------------
 # Haskell tasks
@@ -57,6 +65,37 @@ cabal repl --repl-options=-v0 <<'EOF'
 import Examples.RiskScore
 demoRisk
 EOF
+"""
+
+# -----------------------------------------------------------------
+# Python tasks
+# -----------------------------------------------------------------
+
+[tasks."build:python"]
+description = "uv sync the python project (resolves from uv.lock)"
+dir         = "python"
+run         = "uv sync --frozen"
+
+[tasks."test:python"]
+description = "pytest the python project"
+dir         = "python"
+run         = "uv run pytest"
+
+[tasks."lint:python"]
+description = "ruff + mypy --strict on the python project"
+dir         = "python"
+run = """
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy --strict src/catins
+"""
+
+[tasks."fmt:python"]
+description = "Format the python project with ruff (in place)"
+dir         = "python"
+run = """
+uv run ruff format .
+uv run ruff check --fix .
 """
 
 # -----------------------------------------------------------------

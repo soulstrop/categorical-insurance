@@ -1,0 +1,85 @@
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name            = "catins"
+version         = "0.1.0"
+description     = "Categorical insurance: production-target implementation of the framework explored in haskell/"
+readme          = "README.md"
+license         = { text = "MIT" }
+requires-python = ">=3.13"
+authors         = [{ name = "J. Michael Constans", email = "mikeco@constans.dev" }]
+dependencies    = []
+
+[project.urls]
+Repository = "https://github.com/soulstrop/categorical-insurance"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "hypothesis>=6",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/catins"]
+
+# ---------------------------------------------------------------------------
+# Lint and format: ruff
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length    = 100
+target-version = "py313"
+src            = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",       # pycodestyle
+    "F",            # pyflakes
+    "I",            # isort
+    "N",            # pep8-naming
+    "UP",           # pyupgrade
+    "B",            # flake8-bugbear
+    "A",            # flake8-builtins
+    "C4",           # flake8-comprehensions
+    "PT",           # flake8-pytest-style
+    "RET",          # flake8-return
+    "SIM",          # flake8-simplify
+    "ARG",          # flake8-unused-arguments
+    "PL",           # pylint
+    "TRY",          # tryceratops
+]
+ignore = [
+    "PLR0913",      # too-many-arguments: categorical functions legitimately have many params
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "PLR2004",      # magic numbers fine in tests
+    "ARG001",       # pytest fixtures look like unused args to ruff
+    "S101",         # asserts allowed in tests
+]
+
+# ---------------------------------------------------------------------------
+# Type checking: mypy --strict on the framework, looser on tests
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.13"
+strict         = true
+files          = ["src/catins"]
+
+[[tool.mypy.overrides]]
+module                = "tests.*"
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths       = ["tests"]
+python_files    = ["test_*.py"]
+addopts         = ["-ra", "--strict-markers"]
+filterwarnings  = ["error"]
