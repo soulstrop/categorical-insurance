@@ -1,0 +1,74 @@
+# Root mise configuration: tool versions and task graph for the
+# categorical-insurance monorepo.
+#
+# Per-language refinements live in haskell/mise.toml and (after
+# step 3 of the migration in docs/PHASES.md) python/mise.toml.
+# mise merges these hierarchically as you cd around the tree.
+
+# -----------------------------------------------------------------
+# Top-level meta-tasks
+# -----------------------------------------------------------------
+# These dispatch into the per-language tasks below. As step 3 adds
+# Python, the depends arrays below grow to include build:python,
+# test:python, etc.
+
+[tasks.build]
+description = "Build everything across languages"
+depends     = ["build:haskell"]
+
+[tasks.test]
+description = "Run all tests across languages"
+depends     = ["test:haskell"]
+
+# -----------------------------------------------------------------
+# Haskell tasks
+# -----------------------------------------------------------------
+
+[tasks."build:haskell"]
+description = "cabal build the Haskell sketch"
+dir         = "haskell"
+run         = "cabal build"
+
+[tasks."test:haskell"]
+description = "Verify the Haskell sketch compiles (no test suite yet)"
+dir         = "haskell"
+run         = "cabal build"
+
+[tasks."repl:haskell"]
+description = "Open a cabal REPL on the Haskell sketch"
+dir         = "haskell"
+run         = "cabal repl"
+
+[tasks."demo:insurance"]
+description = "Run Examples.Insurance.demo"
+dir         = "haskell"
+run = """
+cabal repl --repl-options=-v0 <<'EOF'
+import Examples.Insurance
+demo
+EOF
+"""
+
+[tasks."demo:risk"]
+description = "Run Examples.RiskScore.demoRisk"
+dir         = "haskell"
+run = """
+cabal repl --repl-options=-v0 <<'EOF'
+import Examples.RiskScore
+demoRisk
+EOF
+"""
+
+# -----------------------------------------------------------------
+# Documentation tasks
+# -----------------------------------------------------------------
+
+[tasks."docs:math"]
+description = "Build docs/math.tex to math.pdf via latexmk"
+dir         = "docs"
+run         = "latexmk -pdf math.tex"
+
+[tasks."docs:math:clean"]
+description = "Clean LaTeX build artefacts in docs/"
+dir         = "docs"
+run         = "latexmk -C"
