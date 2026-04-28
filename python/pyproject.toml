@@ -18,6 +18,8 @@ dependencies    = [
     "pyarrow>=17.0",
     "pandas>=2.0",
     "pyyaml>=6.0",
+    "dagster>=1.7",
+    "dagster-webserver>=1.7",
 ]
 
 [project.urls]

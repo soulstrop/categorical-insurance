@@ -100,14 +100,15 @@ short-cuts that the production substrate has to recover by other means.
 
 ### The Python production system (`python/`)
 
-Currently a **Phase 0 skeleton** ([`docs/PHASES.md`](docs/PHASES.md)). The
-engineering substrate is in place — `pyproject.toml` (hatchling build, ruff,
-mypy `--strict`, pytest), `uv.lock` for reproducible installs, a `catins`
-importable package, a tests/ directory tracking the Phase-1-mandated layout,
-CI workflow, pre-commit hooks. Framework code (Pydantic models for
-`Proposal`/`Contract`/`Violation`, the `Decision[M]` substrate, Bühlmann
-credibility, `validate`, examples with `demo()`) lands as Phase 0 work
-proper. The conventions that recover the Haskell guarantees in a
+Currently at **Phase 3** ([`docs/PHASES.md`](docs/PHASES.md)). The
+engineering substrate is fully established, including:
+- A categorical `Decision[M]` core and composable `Learner` optics (`catins/`).
+- DuckDB/Parquet integrations for persistence.
+- Snowpark-compatible Pandas vectorized UDF evaluation.
+- First-class Dagster orchestration, including asset graphs for proposals, validation, and automated asset checks against schema drift and guardrail stability.
+- A `pyproject.toml` (hatchling build, ruff, mypy `--strict`, pytest), `uv.lock` for reproducible installs, and CI workflow.
+
+The conventions that recover the Haskell guarantees in a
 language without privacy or `--strict` typing as a default are in
 [`python/README.md`](python/README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 

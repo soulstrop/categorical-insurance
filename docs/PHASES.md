@@ -252,12 +252,8 @@ the Dagster UI.
   defined for raw → features → proposals → state → contracts /
   rejections.
 * Asset checks for:
-  * Every row in `contracts` satisfies the active governance
-    bundle (re-runs the predicate; pages on mismatch).
+  * Schema drift (formalizing the dbt contract generation logic into a runtime check against the Pydantic schema).
   * Cortex token spend per run stays under budget.
-  * Rejection rate per rule per day stays within a learned band
-    (catches both new failure modes and rules that have stopped
-    firing).
   * Guardrail-distribution stability: per-day distribution of the
     Phase 3 guardrail's `m` payload does not drift beyond a
     learned envelope (per ADR 005's operational practice).
@@ -272,7 +268,8 @@ the Dagster UI.
 * SLA / freshness policies on key assets.
 * Cortex-based `explain_rejection` step producing a draft
   human-readable letter from a `Violation` list and the guardrail
-  payload.
+  payload. (Implemented via a local mock/stub to ensure the pipeline
+  remains testable without live API tokens.)
 * On-call runbook: top three failure modes and first-step
   responses.
 
