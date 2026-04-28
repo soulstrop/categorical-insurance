@@ -186,19 +186,26 @@ from history rather than mutable.
 * Pydantic ↔ dbt source-contract generation: a single source of
   truth for the `Proposal` shape across Python and SQL.
 * **Monoid Serialization**: Definition of the `M -> JSON` mapping
-  for monoid payloads, enabling persistence in Snowflake `VARIANT`
-  columns.
+  for monoid payloads. By convention established in Phase 1, `M`
+  must either be a primitive or a Pydantic model (or a list thereof),
+  enabling trivial persistence into Snowflake `VARIANT` columns.
 * **Vectorized UDF Adaptation**: A validator factory that lifts
   row-level `validate` calls into vectorized Snowpark UDFs
   compatible with Pandas Series, registered as one or more
-  *instances* (one per active monoid, per ADR 004).
+  *instances* (one per active monoid, per ADR 004). This includes
+  optimised, bulk Pydantic parsing (e.g., `TypeAdapter.validate_python`)
+  to prevent single-row instantiation bottlenecks inside Pandas.
 * The UDF returns `(admitted: bool, m: M)` per row; the `m`
   payload is persisted alongside the contract or rejection so that
   downstream analytics can reason about the decision without
   re-running the rules.
 * **State Reconstruction from History**: Observation table (append-only)
   and a SQL view that derives current learner state (e.g., `CredState`)
-  from history via precision-weighted aggregation.
+  from history via precision-weighted aggregation. Because composite
+  and gradient-based learners (like `Lin` SGD) cannot be derived
+  purely via SQL views, state management bifurcates: closed-form
+  learners use SQL views, while sequential learners rely on scheduled
+  Python training jobs that write state back to a `VARIANT` column.
 * Cortex `EXTRACT_ANSWER`-style functions for unstructured inputs,
   in their own dbt model with explicit per-run token budget.
 * Python harness (`pipeline.py`) running `dbt run` then the
