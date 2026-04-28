@@ -4,6 +4,8 @@
 [tools]
 python = "3.13"
 uv     = "latest"
+node  = "lts"
+npm = "latest"
 
 [env]
 # Pin the venv location so uv and mise agree.

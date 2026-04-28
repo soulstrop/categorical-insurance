@@ -14,29 +14,29 @@
 
 [tasks.build]
 description = "Build everything across languages"
-depends     = ["build:haskell", "build:python"]
+depends = ["build:haskell", "build:python"]
 
 [tasks.test]
 description = "Run all tests across languages"
-depends     = ["test:haskell", "test:python"]
+depends = ["test:haskell", "test:python"]
 
 [tasks.lint]
 description = "Run all linters"
-depends     = ["lint:python"]
+depends = ["lint:python"]
 
 [tasks.fmt]
 description = "Format all sources"
-depends     = ["fmt:python"]
+depends = ["fmt:python"]
 
 [tasks.setup]
 description = "One-time: install pre-commit's git hook"
-dir         = "python"
-run         = "uv run pre-commit install"
+dir = "python"
+run = "uv run pre-commit install"
 
 [tasks."pre-commit:run"]
 description = "Run all pre-commit hooks against all files"
-dir         = "python"
-run         = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"
+dir = "python"
+run = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"
 
 # -----------------------------------------------------------------
 # Haskell tasks
@@ -44,22 +44,22 @@ run         = "uv run pre-commit run --all-files --config ../.pre-commit-config.
 
 [tasks."build:haskell"]
 description = "cabal build the Haskell sketch"
-dir         = "haskell"
-run         = "cabal build"
+dir = "haskell"
+run = "cabal build"
 
 [tasks."test:haskell"]
 description = "Verify the Haskell sketch compiles (no test suite yet)"
-dir         = "haskell"
-run         = "cabal build"
+dir = "haskell"
+run = "cabal build"
 
 [tasks."repl:haskell"]
 description = "Open a cabal REPL on the Haskell sketch"
-dir         = "haskell"
-run         = "cabal repl"
+dir = "haskell"
+run = "cabal repl"
 
 [tasks."demo:insurance"]
 description = "Run Examples.Insurance.demo"
-dir         = "haskell"
+dir = "haskell"
 run = """
 cabal repl --repl-options=-v0 <<'EOF'
 import Examples.Insurance
@@ -69,7 +69,7 @@ EOF
 
 [tasks."demo:risk"]
 description = "Run Examples.RiskScore.demoRisk"
-dir         = "haskell"
+dir = "haskell"
 run = """
 cabal repl --repl-options=-v0 <<'EOF'
 import Examples.RiskScore
@@ -83,17 +83,17 @@ EOF
 
 [tasks."build:python"]
 description = "uv sync the python project (resolves from uv.lock)"
-dir         = "python"
-run         = "uv sync --frozen"
+dir = "python"
+run = "uv sync --frozen"
 
 [tasks."test:python"]
 description = "pytest the python project"
-dir         = "python"
-run         = "uv run pytest"
+dir = "python"
+run = "uv run pytest"
 
 [tasks."lint:python"]
 description = "ruff + mypy --strict on the python project"
-dir         = "python"
+dir = "python"
 run = """
 uv run ruff check .
 uv run ruff format --check .
@@ -102,7 +102,7 @@ uv run mypy --strict src/catins
 
 [tasks."fmt:python"]
 description = "Format the python project with ruff (in place)"
-dir         = "python"
+dir = "python"
 run = """
 uv run ruff format .
 uv run ruff check --fix .
@@ -114,10 +114,10 @@ uv run ruff check --fix .
 
 [tasks."docs:math"]
 description = "Build docs/math.tex to math.pdf via latexmk"
-dir         = "docs"
-run         = "latexmk -pdf math.tex"
+dir = "docs"
+run = "latexmk -pdf math.tex"
 
 [tasks."docs:math:clean"]
 description = "Clean LaTeX build artefacts in docs/"
-dir         = "docs"
-run         = "latexmk -C"
+dir = "docs"
+run = "latexmk -C"
