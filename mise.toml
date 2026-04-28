@@ -28,6 +28,16 @@ depends     = ["lint:python"]
 description = "Format all sources"
 depends     = ["fmt:python"]
 
+[tasks.setup]
+description = "One-time: install pre-commit's git hook"
+dir         = "python"
+run         = "uv run pre-commit install"
+
+[tasks."pre-commit:run"]
+description = "Run all pre-commit hooks against all files"
+dir         = "python"
+run         = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"
+
 # -----------------------------------------------------------------
 # Haskell tasks
 # -----------------------------------------------------------------

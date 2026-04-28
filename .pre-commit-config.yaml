@@ -1,0 +1,58 @@
+# Pre-commit configuration. Run once per fresh checkout:
+#
+#     mise run setup            # installs pre-commit + the git hook
+#     mise run pre-commit:run   # runs every hook against every file
+#
+# The Python hooks (ruff) auto-fix; the Haskell hook (fourmolu)
+# checks formatting and fails if a file would be rewritten — run
+# `mise run fmt:haskell` to apply.
+
+repos:
+  # ---------------------------------------------------------------
+  # Generic hygiene
+  # ---------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  # ---------------------------------------------------------------
+  # Python: ruff (lint + format)
+  # ---------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^python/.*\.py$
+      - id: ruff-format
+        files: ^python/.*\.py$
+
+  # ---------------------------------------------------------------
+  # Haskell: fourmolu (format check)
+  #
+  # Local hook; requires `fourmolu` on PATH. The hx CLI installs it
+  # transitively, or `cabal install fourmolu` works. The hook is
+  # configured for the manual stage so a fresh checkout without
+  # fourmolu does not block commits; run explicitly via:
+  #
+  #     pre-commit run fourmolu --hook-stage manual --all-files
+  #
+  # `mise run fmt:haskell` applies fourmolu in place when needed.
+  # ---------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: fourmolu
+        name: fourmolu (Haskell, manual)
+        entry: fourmolu --mode=check
+        language: system
+        files: ^haskell/.*\.hs$
+        stages: [manual]

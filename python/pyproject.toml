@@ -22,6 +22,7 @@ dev = [
     "hypothesis>=6",
     "ruff>=0.6",
     "mypy>=1.10",
+    "pre-commit>=4",
 ]
 
 [tool.hatch.build.targets.wheel]

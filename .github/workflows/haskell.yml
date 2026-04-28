@@ -1,0 +1,32 @@
+name: haskell
+
+on:
+  push:
+    paths:
+      - "haskell/**"
+      - ".github/workflows/haskell.yml"
+  pull_request:
+    paths:
+      - "haskell/**"
+      - ".github/workflows/haskell.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: haskell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.14.1"
+      - name: Cache cabal store
+        uses: actions/cache@v4
+        with:
+          path: ~/.cabal/store
+          key: cabal-${{ runner.os }}-${{ hashFiles('haskell/hx.cabal') }}
+          restore-keys: |
+            cabal-${{ runner.os }}-
+      - run: cabal update
+      - run: cabal build
