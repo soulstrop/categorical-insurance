@@ -13,6 +13,9 @@ authors         = [{ name = "J. Michael Constans", email = "mikeco@constans.dev"
 dependencies    = [
     "pydantic>=2.0",
     "numpy>=2.0",
+    "duckdb>=1.0",
+    "polars>=1.0",
+    "pyarrow>=17.0",
 ]
 
 [project.urls]
@@ -71,9 +74,10 @@ ignore = [
 # Type checking: mypy --strict on the framework, looser on tests
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.13"
-strict         = true
-files          = ["src/catins"]
+python_version      = "3.13"
+strict              = true
+disable_error_code  = ["unused-ignore"]
+files               = ["src/catins"]
 
 [[tool.mypy.overrides]]
 module                = "tests.*"
