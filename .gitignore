@@ -1,13 +1,3 @@
-# hx
-.hx/
-dist-newstyle/
-
-# Cabal
-*.hi
-*.o
-*.dyn_hi
-*.dyn_o
-
 # Local-only reading copies of copyrighted material
 docs/*.pdf
 docs/*.zip

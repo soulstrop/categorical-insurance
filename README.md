@@ -1,9 +1,21 @@
-# hx
+# categorical-insurance
 
-A Haskell sketch exploring the mathematics of using machine learning to write
-better insurance policies, structured around a categorical core: **learners as
-morphisms**, **governance as a comonad**, **contracts as the audited outputs of
-governed learner pipelines**.
+A monorepo exploring the mathematics of using machine learning to write better
+insurance policies, structured around a categorical core: **learners as
+morphisms**, **governance as a comonad**, **decisions parameterised by a
+monoid**, **contracts as the audited outputs of governed pipelines**.
+
+The repository is two language peers around a shared core of documentation:
+
+```
+.
+├── haskell/      idea playground (the original sketch; low ceremony)
+├── python/       production-target system (Phase 0 substrate today)
+└── docs/         math.tex, ADRs, PHASES.md, ARCHITECTURE.md, REFERENCES.md
+```
+
+[`mise`](https://mise.jdx.dev) sits at the root and dispatches every developer
+task across both trees.
 
 ---
 
@@ -31,239 +43,175 @@ The answer pursued here is taken from category theory:
 - A **learner** `A → B` is a morphism in a symmetric monoidal category, after
   Fong–Spivak–Tuyéras ("Backprop as Functor") and
   Cruttwell–Gavranović–Ghani–Wilson–Zanasi ("Categorical Foundations of
-  Gradient-Based Learning"). Bayesian conjugate updates, GLMs, and SGD are all
-  instances of the same `(state, implement, update, request)` quadruple.
-- **Governance** is modelled as a **comonad** `Governed p`. A value sits inside
-  a governance context that travels with it; rule sets compose via a `Monoid`
-  instance.
-- A **contract** is an opaque type whose only public constructor is `validate`,
-  which factors through the surrounding `Governance`. *No contract may exist
-  that violates governance* becomes a static guarantee, not a runtime
-  convention.
+  Gradient-Based Learning").
+- A **decision** is a function `P → M` valued in a monoid `M`. **Governance**
+  (binary admit/deny via the free monoid on violations) and **guardrails**
+  (graded scores via richer monoids) are the same structural object,
+  distinguished only by their monoid choice and admissibility predicate.
+- The **`Governed` comonad** carries a decision system as context for a
+  proposal; **validation** is the co-Kleisli arrow that produces a contract
+  iff the aggregated decisions satisfy the admissibility predicate.
+- A **contract** is an opaque type whose only public introduction rule is
+  `validate`. *No contract may exist that violates governance* becomes a
+  static guarantee, not a runtime convention.
+
+The full mathematical development is in [`docs/math.tex`](docs/math.tex);
+the architectural choices in [`docs/adr/`](docs/adr/); the staged rollout in
+[`docs/PHASES.md`](docs/PHASES.md).
 
 ## What
 
-The library defines, in roughly 200 lines, a categorical core plus two
-worked-example learners and a governed-contract demo.
+### The Haskell sketch (`haskell/`)
 
-### The core
-
-```text
-src/
-  Learner.hs       -- Learner a b = ∃s. (s, s→a→b, s→a→b→s, s→a→b→a)
-                   -- identity, compose, (>>>), parallel, runLearner, step
-  Governance.hs    -- Comonad class; Governed p (Env comonad);
-                   -- Governance p (Monoid); Rule, Violation
-  Contract.hs      -- abstract Contract; validate :: Governed p p
-                   --                              -> Either [Violation] (Contract p)
-```
-
-A `Learner` carries a hidden state `s`. Two learners with different internal
-representations are interchangeable at the `a → b` interface — this is what
-lets a Bayesian credibility model and a neural net be composed in the same
-pipeline.
-
-`compose` is the FST/CGGWZ sequential composition: the composite state is the
-pair of inner states, and the *request* map propagates target signals upstream
-so the inner learner knows what to train against. `parallel` is the monoidal
-product: two learners run side-by-side with independent state.
-
-### Examples
+Roughly 300 lines of idiomatic Haskell exhibiting the categorical core and
+worked examples:
 
 ```text
-src/Examples/
-  Credibility.hs   -- Normal–Normal conjugate Bayesian credibility model
-                   --   as Learner () Double
-                   --   classical Bühlmann credibility falls out of the recursion
-  Linear.hs        -- Online-SGD linear regression
-                   --   as Learner [Double] Double
-                   --   request map carries the input-gradient ∂L/∂x = (ŷ - y) w
-  Proposal.hs      -- shared Proposal + ProductLine record
-  Regulation.hs    -- composable regulatory bundles:
-                   --   federalRegulations  (protected class, ACA MLR floor)
-                   --   california          (Prop 103, min auto liability)
-                   --   newYork             (min auto liability)
-                   --   forJurisdiction / forProductLine guard combinators
-  Guardrails.hs    -- "guardrail-flavoured" governance rules (binary
-                   --   Decision[List Violation] under the hood; see
-                   --   ADR 005 + RiskScore.hs for the genuinely
-                   --   monoid-parameterised guardrail)
-  RiskScore.hs     -- math.tex §VI worked instance: M = RiskScore
-                   --   (additive non-negative reals) with thresholding
-                   --   admission; joint product-monoid example combining
-                   --   binary governance with graded guardrails;
-                   --   demoRisk :: IO () exercises both
-  Insurance.hs     -- basicGovernance + defaultProposal + demo :: IO ()
-                   --   demo composes regulatory bundles and guardrails into
-                   --   a layered regime and exercises each layer
+haskell/src/
+  Learner.hs           -- Learner a b = ∃s. (s, s→a→b, s→a→b→s, s→a→b→a)
+                       -- identity, compose, (>>>), parallel, runLearner, step
+  Governance.hs        -- Comonad class; Governed p (Env comonad);
+                       -- Governance p (Monoid); Rule, Violation
+  DecisionSystem.hs    -- math.tex §VI: Decision m p, DecisionSystem m p,
+                       -- aggregate, GovernedDS, GenContract, validateDS
+  Contract.hs          -- abstract Contract; validate :: Governed p p
+                       --                              -> Either [Violation] (Contract p)
+  Examples/
+    Credibility.hs     -- Normal–Normal Bayesian credibility (M = ()) ; Bühlmann
+                       -- credibility falls out of the recursion
+    Linear.hs          -- Online-SGD linear regression; request map carries
+                       -- the input-gradient ∂L/∂x = (ŷ - y) w
+    Proposal.hs        -- shared Proposal + ProductLine record
+    Regulation.hs      -- composable regulatory bundles (federal, CA, NY)
+    Guardrails.hs      -- "guardrail-flavoured" governance rules (binary
+                       -- Decision[List Violation]; see ADR 005)
+    RiskScore.hs       -- math.tex §VI worked instance: M = RiskScore
+                       -- (additive non-negative reals); joint product-monoid
+                       -- example combining binary governance with graded
+                       -- guardrails; demoRisk :: IO () exercises both
+    Insurance.hs       -- basicGovernance + defaultProposal + demo :: IO ()
+                       -- composes regulatory bundles + guardrails into a
+                       -- layered regime and exercises each layer
 ```
 
-The `DecisionSystem` module at the top level (`src/DecisionSystem.hs`)
-implements math.tex §VI: `Decision m p = p -> m`, `DecisionSystem m p =
-[Decision m p]`, `aggregate`, `GovernedDS` (Env comonad over a decision
-system), abstract `GenContract`, and `validateDS` parameterised by an
-admissibility predicate `m -> Bool`. Governance, Guardrails, and the
-joint product monoid are all instances of this one substrate, per
-ADR 005.
+This tree is the **idea playground**: low ceremony, type-system-enforced
+guarantees (the `Contract` abstraction barrier is a real one), reasoning
+short-cuts that the production substrate has to recover by other means.
 
-#### Layered governance
+### The Python production system (`python/`)
 
-The demo's contract regime is constructed by `Monoid` composition of four
-governance bundles carried by the `Governed` comonad:
+Currently a **Phase 0 skeleton** ([`docs/PHASES.md`](docs/PHASES.md)). The
+engineering substrate is in place — `pyproject.toml` (hatchling build, ruff,
+mypy `--strict`, pytest), `uv.lock` for reproducible installs, a `catins`
+importable package, a tests/ directory tracking the Phase-1-mandated layout,
+CI workflow, pre-commit hooks. Framework code (Pydantic models for
+`Proposal`/`Contract`/`Violation`, the `Decision[M]` substrate, Bühlmann
+credibility, `validate`, examples with `demo()`) lands as Phase 0 work
+proper. The conventions that recover the Haskell guarantees in a
+language without privacy or `--strict` typing as a default are in
+[`python/README.md`](python/README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## How
+
+### Setup (once per fresh checkout)
+
+```bash
+git clone <repo> && cd categorical-insurance
+mise trust              # one-time: trust the mise.toml files
+mise install            # installs pinned tools (python, uv, hx)
+mise run build:python   # uv sync the Python venv
+mise run setup          # installs the pre-commit git hook
+mise run test           # smoke: both languages green end-to-end
+```
+
+### Daily tasks
+
+```bash
+mise tasks              # list everything
+mise run test           # all tests across languages
+mise run lint           # all linters (ruff + mypy --strict)
+mise run fmt            # all formatters
+mise run docs:math      # build docs/math.tex to PDF
+```
+
+Per-language scoping:
+
+```bash
+mise run test:haskell    mise run test:python
+mise run lint:python     mise run fmt:python
+```
+
+Haskell demos run directly:
+
+```bash
+mise run repl:haskell        # cabal repl, ready to import Examples.*
+mise run demo:risk           # Examples.RiskScore.demoRisk
+mise run demo:insurance      # Examples.Insurance.demo
+```
+
+### Layered governance demo (Haskell)
+
+The composed contract regime is built by `Monoid` composition of bundles
+carried by the `Governed` comonad:
 
 ```haskell
 caRegime = federalRegulations    -- federal statute
         <> california            -- state statute (Prop 103, min liability)
-        <> internalUnderwriting  -- ML/pricing guardrails
+        <> internalUnderwriting  -- ML/pricing guardrails (binary)
         <> basicGovernance       -- premium > 0, loss-ratio cap, coverage cap
 ```
 
-Switching jurisdictions is a one-line edit (`<> newYork` instead of
-`<> california`), and a proposal that passes federal but fails Prop 103 (or
-that uses a federally prohibited rating factor) is rejected with one
-violation per layer that catches it — making layered enforcement legible
-rather than collapsing into a single yes/no.
-
-The `demo` shows:
-
-- A credibility learner whose posterior mean tracks the empirical claim mean.
-- A linear regressor recovering known weights `[2, 3]` to ~10 digits after
-  1400 SGD steps.
-- A two-policy portfolio learned via `parallel`, with independent posteriors.
-- Eleven proposals run through the layered regime: one approved, ten rejected
-  across federal, state, internal-guardrail, and basic-underwriting layers.
-
-## How
-
-### Toolchain
-
-This project is managed by [`hx`](https://github.com/raskell-io/hx), an
-opinionated Haskell toolchain CLI.
-
-```bash
-hx --version           # confirm hx is installed
-hx build               # build the library
-hx watch               # rebuild on file changes
-hx repl                # interactive GHCi (used to run the demo)
-hx fmt                 # format with fourmolu
-hx lock / hx sync      # lockfile-pinned reproducible builds
-```
-
-`cabal` works directly as well; the project is a plain `cabal-version: 3.0`
-library targeting GHC 9.14.
-
-### Running the demo
-
-```bash
-cabal repl
-ghci> import Examples.Insurance
-ghci> demo
-```
-
-Expected output (abridged):
+Switching jurisdictions is a one-line edit (`<> newYork`); a proposal that
+passes federal but fails Prop 103 (or uses a federally prohibited rating
+factor) is rejected with one violation per layer that catches it. The
+`demo` exercises eleven proposals and produces output of the form:
 
 ```
-=== Bayesian credibility learner ===
-  posterior mean  : 1224.91...
-
-=== linear regression learner ===
-  recovered ≈ [2.0000..., 2.9999...]
-
-=== parallel portfolio (two policies) ===
-  posterior means : (1012.4..., 2170.7...)
-
 === composed governance: federal <> state <> guardrails <> underwriting ===
   CA / clean baseline                 → APPROVED
   CA / federal: prohibited factor     → REJECTED:
     - federal/protected_class: rating factors prohibited under federal law: ["race"]
     - ca/prop_103: Prop 103: rating factors not in approved auto set: ["race"]
-  CA / Prop 103: factor not approved  → REJECTED:
-    - ca/prop_103: ...
-  CA / state: sub-min auto liability  → REJECTED:
-    - ca/min_auto_liability: California auto liability minimum is 15,000
-  NY / state: sub-min auto liability  → REJECTED:
-    - ny/min_auto_liability: New York auto liability minimum is 25,000
-  guardrail / no insured consent      → REJECTED:
-    - guardrail/consent: insured consent for data use is required
-  guardrail / rate shock vs prior     → REJECTED:
-    - guardrail/rate_stability: ...
-  guardrail / low explainability      → REJECTED:
-    - guardrail/explainability: ...
-  guardrail / large coverage no re    → REJECTED:
-    - guardrail/reinsurance_cession: ...
-  underwriting / loss ratio > cap     → REJECTED:
-    - max_loss_ratio: ...
-    - coverage_cap: ...
-  underwriting / coverage > 10x prem  → REJECTED:
-    - coverage_cap: ...
+  ...
 ```
 
-### Writing a new learner
+`Examples.RiskScore.demoRisk` runs the same baseline through three regimes —
+the `M = list[Violation]` governance, the `M = RiskScore` guardrail
+(additive non-negative reals with thresholding admission), and the joint
+product monoid `M = ([Violation], RiskScore)` — making math.tex §VI's
+"same category, different monoids" concrete.
 
-A learner is a single value of type `Learner a b`:
+## Documentation
 
-```haskell
-myLearner :: Learner Input Output
-myLearner = Learner
-    initialState
-    (\s a   -> ...)        -- implement: predict given state and input
-    (\s a b -> ...)        -- update:    revise state given input + target
-    (\s a b -> ...)        -- request:   propagate a target signal upstream
-```
-
-Compose with `(>>>)` and `parallel`; train with `step`.
-
-### Writing a governance rule
-
-Rules are predicates on the proposal type, returning `Just Violation` on
-failure:
-
-```haskell
-solvencyRule :: Rule Proposal
-solvencyRule = Rule "solvency" $ \p ->
-    if reservesAdequate p
-        then Nothing
-        else Just (Violation "solvency" "reserve coverage below threshold")
-```
-
-Compose rules with `addRule` or `<>` over `Governance`. Bind a proposal as a
-`Contract` only via `validate`.
+| Document | What |
+|---|---|
+| [`docs/math.tex`](docs/math.tex) | Formal mathematical companion (LaTeX/IEEEtran, build with `mise run docs:math`) |
+| [`docs/adr/`](docs/adr/) | Five architecture decision records (governance locality, orchestration, learners vs Cortex, decision systems, governance vs guardrails) |
+| [`docs/PHASES.md`](docs/PHASES.md) | Phased rollout plan (laptop MVP → multi-jurisdiction with replay → audit-aware research extensions) |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Production system architecture on Snowflake |
+| [`docs/REFERENCES.md`](docs/REFERENCES.md) | Bibliography of underlying papers |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, mise tasks, per-language conventions, ADR authoring guidance |
 
 ## Status and direction
 
-This is an exploratory sketch, not a library aiming for production use. Open
-threads worth pulling on:
+This is exploratory. Open threads worth pulling on (also captured in
+math.tex's *Outlook* section and PHASES.md's Phase 5):
 
-- **Probabilistic outputs.** Lift `b` from point estimates to distributions so
-  governance can reason about posterior uncertainty, not just the mean.
-- **Audit-aware governance.** Widen `Rule` to inspect a learner's audit trail
-  (state at decision time, training history) rather than only the proposal.
+- **Probabilistic outputs.** Lift the codomain of `implement` from point
+  estimates to distributions so guardrails can reason about posterior
+  uncertainty, not only the mean.
+- **Audit-aware governance.** Widen `Rule` / `Decision` to inspect a
+  learner's audit trail (state at decision time, training history) rather
+  than only the proposal.
 - **Cokleisli arrows on `Governed`.** Layered governance is currently
-  expressed via the `Monoid` instance on `Governance` carried by the
-  comonad — composition is at the environment level, not the comonad
-  itself. `extend` and `duplicate` become useful when arrows need to
-  *transform* governance contextually (e.g., a re-audit step that injects
-  additional rules based on what the proposal already passed).
+  expressed via the `Monoid` instance carried by the comonad — composition
+  is at the environment level, not the comonad itself. `extend` and
+  `duplicate` become useful when arrows need to *transform* governance
+  contextually (e.g., a re-audit step that injects additional rules based
+  on what the proposal already passed).
 - **Lens / Para alignment.** Sequential composition of learners embeds into
-  the bicategory of optics via the `Para` construction. Making that explicit
-  would let lens machinery be used directly on learner state.
-
-## Mathematical write-up
-
-A self-contained mathematical companion lives at
-[`docs/math.tex`](docs/math.tex). It covers the category of learners
-(definition, sequential composition, monoidal product), the two
-worked instances (Bühlmann credibility, gradient linear regression),
-the Env comonad over the monoid of governance objects, validation as
-a co-Kleisli arrow, and layered regulation. Diagrams are typeset with
-`tikz-cd`. Build with:
-
-```bash
-cd docs && latexmk -pdf math.tex
-```
-
-A bibliography of the underlying papers is maintained at
-[`docs/REFERENCES.md`](docs/REFERENCES.md).
+  the bicategory of optics via the `Para` construction. Making that
+  explicit would let lens machinery be used directly on learner state.
 
 ## References
 
@@ -274,6 +222,8 @@ A bibliography of the underlying papers is maintained at
   Cybernetics*
 - Bühlmann, Gisler — *A Course in Credibility Theory and its Applications*
 
+Full bibliography in [`docs/REFERENCES.md`](docs/REFERENCES.md).
+
 ## License
 
-MIT.
+MIT — see [`LICENSE`](LICENSE).
