@@ -16,6 +16,10 @@ def serialize_contracts_to_parquet[M](contracts: list[Contract[M]], filepath: st
     """Serialize a list of contracts to a Parquet file.
 
     This flattens the proposal and payload into a single record per contract.
+
+    By convention established in Phase 1, the monoid payload `M` must either
+    be a primitive, a Pydantic model, or a list thereof. This ensures trivial
+    persistence into Snowflake `VARIANT` columns or Parquet files.
     """
     if not contracts:
         return
