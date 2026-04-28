@@ -24,6 +24,7 @@ jobs:
         with:
           install: true
           cache: true
+      - run: mise install
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
