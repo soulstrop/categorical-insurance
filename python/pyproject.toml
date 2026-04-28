@@ -10,7 +10,10 @@ readme          = "README.md"
 license         = { text = "MIT" }
 requires-python = ">=3.13"
 authors         = [{ name = "J. Michael Constans", email = "mikeco@constans.dev" }]
-dependencies    = []
+dependencies    = [
+    "pydantic>=2.0",
+    "numpy>=2.0",
+]
 
 [project.urls]
 Repository = "https://github.com/soulstrop/categorical-insurance"

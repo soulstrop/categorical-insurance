@@ -115,8 +115,9 @@ governance composition).
   fixture generators.
 * A second learner: linear regression with online SGD (matches the
   `Lin` example in `math.tex`).
-* Sequential composition (`compose`) and parallel product
-  (`parallel`) implementations, exercised by tests.
+* **Learner Algebra**: Sequential composition (`compose`), identity
+  (`id_learner`), and parallel product (`parallel`) implementations,
+  mapping to the optic-like combinators in `math.tex`.
 * Property-based tests (Hypothesis) for:
   * `compose(g, identity) ≡ g` and `compose(identity, f) ≡ f`
   * `compose(compose(h, g), f) ≡ compose(h, compose(g, f))` up to
@@ -128,8 +129,9 @@ governance composition).
     parametric assertion.
 * **Hypothesis strategy library** (`tests/strategies.py`):
   named generators for `proposals()`, `rules()`, `risk_scores()`,
-  `decision_systems(monoid)` etc. Tests import strategies from
-  one module; ad-hoc per-test generation is review-blocking.
+  `decision_systems(monoid)` etc. Strategies for `Proposal` types
+  are derived from Pydantic metadata (using `model_json_schema`) to
+  ensure they stay in sync with the models.
 * **Smoke tests for learner correctness** on a holdout, distinct
   from the categorical property tests above. Each learner has a
   test of the form "after training on this fixture, the
@@ -183,16 +185,20 @@ from history rather than mutable.
 * dbt project for feature engineering with sources and contracts.
 * Pydantic ↔ dbt source-contract generation: a single source of
   truth for the `Proposal` shape across Python and SQL.
-* A *single* Snowpark vectorized UDF implementation parameterised
-  by `M` (per ADR 004); registered as one or more *instances*, one
-  per active monoid choice. The Phase 2 instance evaluates the
-  Governance monoid `M = list[Violation]`.
+* **Monoid Serialization**: Definition of the `M -> JSON` mapping
+  for monoid payloads, enabling persistence in Snowflake `VARIANT`
+  columns.
+* **Vectorized UDF Adaptation**: A validator factory that lifts
+  row-level `validate` calls into vectorized Snowpark UDFs
+  compatible with Pandas Series, registered as one or more
+  *instances* (one per active monoid, per ADR 004).
 * The UDF returns `(admitted: bool, m: M)` per row; the `m`
   payload is persisted alongside the contract or rejection so that
   downstream analytics can reason about the decision without
   re-running the rules.
-* Observation table (append-only) and a SQL view that derives
-  current learner state from history.
+* **State Reconstruction from History**: Observation table (append-only)
+  and a SQL view that derives current learner state (e.g., `CredState`)
+  from history via precision-weighted aggregation.
 * Cortex `EXTRACT_ANSWER`-style functions for unstructured inputs,
   in their own dbt model with explicit per-run token budget.
 * Python harness (`pipeline.py`) running `dbt run` then the
