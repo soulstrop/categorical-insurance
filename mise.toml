@@ -30,6 +30,12 @@ description = "Clean LaTeX build artefacts in docs/"
 dir = "docs"
 run = "latexmk -C"
 
+[plugins]
+tinytex = "https://github.com/mise-plugins/mise-tinytex.git"
+
 [tools]
+tinytex = "latest"
+perl = "5.38" # needed  for tinytex
+
 act = "latest"
 qdns = "latest"
