@@ -10,3 +10,34 @@ npm = "latest"
 [env]
 # Pin the venv location so uv and mise agree.
 UV_PROJECT_ENVIRONMENT = ".venv"
+
+[tasks.build]
+description = "uv sync the python project (resolves from uv.lock)"
+run = "uv sync --frozen"
+
+[tasks.test]
+description = "pytest the python project"
+run = "uv run pytest"
+
+[tasks.lint]
+description = "ruff + mypy --strict on the python project"
+run = """
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy --strict src/catins
+"""
+
+[tasks.fmt]
+description = "Format the python project with ruff (in place)"
+run = """
+uv run ruff format .
+uv run ruff check --fix .
+"""
+
+[tasks.setup]
+description = "One-time: install pre-commit's git hook"
+run = "uv run pre-commit install"
+
+[tasks."pre-commit:run"]
+description = "Run all pre-commit hooks against all files"
+run = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"

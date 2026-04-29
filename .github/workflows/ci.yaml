@@ -15,10 +15,13 @@ jobs:
         with:
           install: true
           cache: true
+        env:
+          # REQUIRED for experimental monorepo features
+          MISE_EXPERIMENTAL: 1
       - name: Lint and Test Python
         run: |
-          mise run lint:python
-          mise run test:python
+          mise run //python:lint
+          mise run //python:test
 
   # Haskell Job
   haskell-build:
@@ -29,8 +32,10 @@ jobs:
         with:
           install: true
           cache: true
+        env:
+          MISE_EXPERIMENTAL: 1
       - name: Verify Haskell Sketch
-        run: mise run test:haskell
+        run: mise run //haskell:test
 
   # Documentation Job
   docs:
@@ -40,5 +45,7 @@ jobs:
       - uses: jdx/mise-action@v4
         with:
           install: true
+        env:
+          MISE_EXPERIMENTAL: 1
       - name: Build Math Docs
         run: mise run docs:math

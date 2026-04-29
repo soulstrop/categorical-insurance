@@ -7,3 +7,33 @@
 
 [tools]
 hx = "0.6.0"
+
+[tasks."build"]
+description = "cabal build the Haskell sketch"
+run = "cabal build"
+
+[tasks."test"]
+description = "Verify the Haskell sketch compiles (no test suite yet)"
+run = "cabal build"
+
+[tasks."repl"]
+description = "Open a cabal REPL on the Haskell sketch"
+run = "cabal repl"
+
+[tasks."demo:insurance"]
+description = "Run Examples.Insurance.demo"
+run = """
+cabal repl --repl-options=-v0 <<'EOF'
+import Examples.Insurance
+demo
+EOF
+"""
+
+[tasks."demo:risk"]
+description = "Run Examples.RiskScore.demoRisk"
+run = """
+cabal repl --repl-options=-v0 <<'EOF'
+import Examples.RiskScore
+demoRisk
+EOF
+"""
