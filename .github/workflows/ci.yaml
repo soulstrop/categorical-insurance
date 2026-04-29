@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Python Job
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+      - name: Lint and Test Python
+        run: |
+          mise run lint:python
+          mise run test:python
+
+  # Haskell Job
+  haskell-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+      - name: Verify Haskell Sketch
+        run: mise run test:haskell
+
+  # Documentation Job
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          install: true
+      - name: Build Math Docs
+        run: mise run docs:math
