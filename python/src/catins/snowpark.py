@@ -20,8 +20,10 @@ P = TypeVar("P", bound=Proposal)
 
 def serialize_payload(payload: Any) -> Any:
     """Serialize a monoid payload into JSON-compatible primitives."""
+    if isinstance(payload, tuple):
+        return tuple(serialize_payload(x) for x in payload)
     if isinstance(payload, list):
-        return [v.model_dump() if hasattr(v, "model_dump") else v for v in payload]
+        return [serialize_payload(v) for v in payload]
     if hasattr(payload, "model_dump"):
         return payload.model_dump()
     return payload

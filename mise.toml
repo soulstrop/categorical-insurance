@@ -121,3 +121,6 @@ run = "latexmk -pdf math.tex"
 description = "Clean LaTeX build artefacts in docs/"
 dir = "docs"
 run = "latexmk -C"
+
+[tools]
+act = "latest"
