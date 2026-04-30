@@ -2,7 +2,7 @@
 and asset checks (including the P3.2 Cortex budget check).
 """
 
-from dagster import materialize
+from dagster import AssetKey, materialize
 
 from catins.orchestration.assets import (
     partitioned_outcomes,
@@ -85,3 +85,19 @@ def test_cortex_budget_check_fails_on_planted_overrun() -> None:
     result = _materialize_with_cortex(cortex)
     assert result.success  # type: ignore[attr-defined]
     assert not _budget_check_passed(result)
+
+
+def test_freshness_policies_attached_to_terminal_assets() -> None:
+    """The SLA-bound assets carry FreshnessPolicy time-window definitions.
+
+    Dagster surfaces freshness state (PASS/WARN/FAIL/UNKNOWN) per asset
+    in the UI based on the policy and last materialisation time; the
+    policy must be present on each asset for the state to be computed.
+    """
+    asset_graph = defs.resolve_asset_graph()
+    expected_assets = {"validated_outcomes", "contracts", "rejections"}
+    for asset_name in expected_assets:
+        asset_key = AssetKey(asset_name)
+        asset_node = asset_graph.get(asset_key)
+        policy = asset_node.freshness_policy
+        assert policy is not None, f"{asset_name} is missing a FreshnessPolicy"

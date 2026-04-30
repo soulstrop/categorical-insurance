@@ -1,15 +1,26 @@
 """Dagster Software-Defined Assets for the insurance validation pipeline."""
 
+from datetime import timedelta
 from typing import Any
 
 import pandas as pd
-from dagster import AssetOut, asset, multi_asset
+from dagster import AssetOut, FreshnessPolicy, asset, multi_asset
 
 from catins.cortex import explain_rejection
 from catins.models import CanonicalProposal, Violation
 from catins.monoid import ListMonoid, RiskScoreMonoid, product_monoid
 from catins.orchestration.resources import CortexResource
 from catins.snowpark import vectorize_validator
+
+# SLA: each terminal asset must have been materialised within the last
+# 24 hours, with a warning at 12 hours. The Phase 3 daily schedule
+# (P3.7) materialises on a 24h cadence; missing a run trips warn at
+# 12h past deadline and fail at 24h. Surfaces in the Dagster UI as
+# the asset's freshness state.
+ASSET_FRESHNESS = FreshnessPolicy.time_window(
+    fail_window=timedelta(hours=24),
+    warn_window=timedelta(hours=12),
+)
 
 # JointProposal is an alias for CanonicalProposal: the Phase 2/3 joint
 # (Governance × Guardrail) decision system operates over the canonical
@@ -72,7 +83,7 @@ def raw_proposals() -> pd.DataFrame:
     )
 
 
-@asset
+@asset(freshness_policy=ASSET_FRESHNESS)
 def validated_outcomes(raw_proposals: pd.DataFrame) -> pd.DataFrame:
     """Apply the vectorized joint decision system."""
     # Apply UDF
@@ -101,8 +112,8 @@ def validated_outcomes(raw_proposals: pd.DataFrame) -> pd.DataFrame:
 
 @multi_asset(
     outs={
-        "contracts": AssetOut(),
-        "rejections": AssetOut(),
+        "contracts": AssetOut(freshness_policy=ASSET_FRESHNESS),
+        "rejections": AssetOut(freshness_policy=ASSET_FRESHNESS),
     }
 )
 def partitioned_outcomes(validated_outcomes: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
