@@ -599,6 +599,53 @@ predicate distinguishes them. The framework requires neither
 prior commitment to which rules are ``hard'' nor architectural
 separation between the two flavours.
 
+\paragraph*{Visibility (per-query guardrail).}
+The four instances above gate contract construction at the moment
+of validation. Two further instances extend $\Validate_{M,
+\mathrm{adm}}$ to operational concerns where ``admit/refuse'' is
+parametric in something beyond the monoid value.
+
+Let $\Sigma$ be a finite lattice of \emph{visibility states} (e.g.\
+$\mathrm{Erased}$; $\mathrm{RestrictedTo}(R)$ for $R \subseteq
+\mathrm{Role}$; $\mathrm{Visible}$) ordered by restrictiveness.
+Take $M := \Sigma$ with $\otimes := \wedge$ (meet; the more
+restrictive of two states) and $e := \mathrm{Visible}$.
+Admission is parametrised by querying role: for each $r \in
+\mathrm{Role}$, $\mathrm{adm}_r(\sigma) := (\sigma\ \text{admits}\
+r)$. A decision system aggregates per-row visibility — an
+erasure rule contributes $\mathrm{Erased}$ for tombstoned rows;
+a litigation-hold rule contributes $\mathrm{RestrictedTo}(\dots)$;
+the consumer-facing view for role $r$ is
+$\Validate_{M, \mathrm{adm}_r}$ restricted to admitted rows.
+\Cref{thm:static-M} applies separately to each $\mathrm{adm}_r$,
+and the abstraction barrier on the consumer-facing surface holds
+for that role.
+
+In the production system this recovers the right-to-erasure
+mechanism: the view-layer filter \texttt{WHERE erased = false} is
+$\Validate_{M, \mathrm{adm}_{\mathrm{consumer}}}$, with the
+privacy-officer role admitting the strictly more restrictive
+states for audit purposes.
+
+\paragraph*{Labelling (degenerate admission).}
+Take any monoid $(M, \otimes, e)$ and set $\mathrm{adm}(m) := \top$
+for all $m$. $\Validate_{M, \top}$ always returns
+$\inr(\Contract_M(p))$, with the carried $\langle D \rangle(p)$
+persisted as \emph{label} rather than \emph{gate}.
+
+The paradigmatic instance is field classification of personally
+identifiable information: take $M := \mathrm{Field} \to
+\mathrm{Sensitivity}$ with per-field most-restrictive merge as
+$\otimes$ and the constant-everywhere-non-sensitive function as
+$e$. Each classification rule is a decision
+$d \colon \mathrm{Schema} \to M$ contributing partial
+classifications; the aggregate is the merged classification of
+all fields across all rules. \Cref{thm:static-M} holds vacuously
+and carries no admissibility content; the categorical structure
+justifies treating classification as a first-class decision
+system that composes with other systems and participates in the
+same replay arithmetic as \cref{sec:layered}'s governance bundles.
+
 \subsection{Connection to industrial notations}
 
 The product-monoid construction of the previous paragraph is the
