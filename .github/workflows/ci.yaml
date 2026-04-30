@@ -49,5 +49,10 @@ jobs:
           install: true
         env:
           MISE_EXPERIMENTAL: 1
+      - name: Download IEEE journal template
+        run: |
+          curl -L -o /tmp/ieee-template.zip \
+            "https://template-selector.ieee.org/api/ieee-template-selector/template/239/download"
+          unzip -o /tmp/ieee-template.zip -d docs/
       - name: Build Math Docs
         run: mise run docs:math
