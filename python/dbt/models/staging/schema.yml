@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: stg_proposals
+    description: Cleaned and typed proposal rows.
+    columns:
+      - name: holder
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: premium
+        data_type: DOUBLE
+      - name: zip_code
+        data_type: VARCHAR
+      - name: age
+        data_type: INTEGER

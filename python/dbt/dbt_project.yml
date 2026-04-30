@@ -1,0 +1,16 @@
+name: catins
+version: "0.1.0"
+config-version: 2
+
+profile: catins
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  catins:
+    staging:
+      +materialized: view

@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >-
+      Raw upstream proposal data. In dev this is materialised into the
+      DuckDB warehouse by tests/harness setup; in sandbox it is the
+      Snowflake landing zone populated by upstream extractors.
+    tables:
+      - name: proposals
+        description: Raw proposal rows; one per submission.
+        columns:
+          - name: holder
+            data_type: VARCHAR
+            description: Policy holder name.
+          - name: premium
+            data_type: DOUBLE
+            description: Proposed premium amount.
+          - name: zip_code
+            data_type: VARCHAR
+            description: 5-digit ZIP code.
+          - name: age
+            data_type: INTEGER
+            description: Holder age in years.

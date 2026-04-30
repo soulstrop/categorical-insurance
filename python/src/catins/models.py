@@ -29,6 +29,22 @@ class Proposal(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class CanonicalProposal(Proposal):
+    """The canonical Phase 2/3 proposal shape.
+
+    The fields here are the single source of truth for the dbt source
+    contract (``dbt/models/staging/_sources.yml``) and for every
+    warehouse-side reference to a proposal column. Drift between this
+    model and the dbt YAML is enforced as a CI failure (see
+    ``catins.dbt.check_dbt_source_drift``).
+    """
+
+    holder: str
+    premium: float
+    zip_code: str
+    age: int
+
+
 class Contract[M](BaseModel):
     """A constructed insurance contract.
 

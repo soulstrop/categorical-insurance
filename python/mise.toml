@@ -41,3 +41,15 @@ run = "uv run pre-commit install"
 [tasks."pre-commit:run"]
 description = "Run all pre-commit hooks against all files"
 run = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"
+
+[tasks."dbt:build"]
+description = "Build the dbt project against local DuckDB (dev profile)"
+run = "uv run dbt build --project-dir dbt --profiles-dir dbt"
+
+[tasks."dbt:debug"]
+description = "Validate the dbt connection (dev profile, DuckDB)"
+run = "uv run dbt debug --project-dir dbt --profiles-dir dbt"
+
+[tasks."dbt:check-drift"]
+description = "Fail if dbt _sources.yml drifts from CanonicalProposal"
+run = "uv run python -m catins.dbt"

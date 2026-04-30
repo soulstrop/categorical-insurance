@@ -1,0 +1,19 @@
+catins:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('CATINS_DUCKDB_PATH', 'target/catins.duckdb') }}"
+      threads: 1
+    prod:
+      # Sandbox-time target: not exercised in CI, kept here as the
+      # intended Phase 2-sandbox switch behind WarehouseSession.
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', '') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', '') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', '') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'PUBLIC') }}"
+      threads: 4

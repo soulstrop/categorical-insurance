@@ -5,19 +5,22 @@ from typing import Any
 import pandas as pd
 from dagster import AssetOut, asset, multi_asset
 
-from catins.cortex import explain_rejection
-from catins.models import Proposal, Violation
+from catins.cortex import BudgetedCortex, MockCortex, explain_rejection
+from catins.models import CanonicalProposal, Violation
 from catins.monoid import ListMonoid, RiskScoreMonoid, product_monoid
 from catins.snowpark import vectorize_validator
 
+# Module-level Cortex client. Phase 3 P3.1 will replace this with a
+# Dagster resource so the underlying client (Mock vs real Cortex) is a
+# deployment-time switch rather than an import-time constant.
+CORTEX_BUDGET_TOKENS = 5_000
+default_cortex = BudgetedCortex(MockCortex(), max_tokens=CORTEX_BUDGET_TOKENS)
 
-class JointProposal(Proposal):
-    """Proposal schema for the Dagster pipeline."""
-
-    holder: str
-    premium: float
-    zip_code: str
-    age: int
+# JointProposal is an alias for CanonicalProposal: the Phase 2/3 joint
+# (Governance × Guardrail) decision system operates over the canonical
+# proposal shape that is the single source of truth across Pydantic
+# and dbt.
+JointProposal = CanonicalProposal
 
 
 # The product monoid for Joint (Governance x Guardrail) decisions
@@ -127,7 +130,7 @@ def rejection_letters(rejections: pd.DataFrame) -> pd.DataFrame:
         # Or we can just pass the dicts directly if the cortex stub handles it
         violations = [Violation(**v) for v in violations_dicts]
 
-        letter = explain_rejection(violations, risk_score)
+        letter = explain_rejection(default_cortex, violations, risk_score)
         letters.append(letter)
 
     df = rejections.copy()

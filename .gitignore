@@ -27,3 +27,10 @@ __pycache__/
 htmlcov/
 dist/
 build/
+.hypothesis/
+
+# dbt
+python/dbt/target/
+python/dbt/dbt_packages/
+python/dbt/logs/
+python/dbt/.user.yml

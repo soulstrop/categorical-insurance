@@ -20,6 +20,8 @@ dependencies    = [
     "pyyaml>=6.0",
     "dagster>=1.7",
     "dagster-webserver>=1.7",
+    "dbt-core>=1.11.8",
+    "dbt-duckdb>=1.10.1",
 ]
 
 [project.urls]

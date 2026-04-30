@@ -21,6 +21,7 @@ jobs:
       - name: Lint and Test Python
         run: |
           mise run //python:lint
+          mise run //python:dbt:check-drift
           mise run //python:test
 
   # Haskell Job
