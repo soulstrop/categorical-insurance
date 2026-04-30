@@ -1,7 +1,8 @@
 # ADR 002: Orchestration — Phased Adoption Toward Dagster
 
 ## Status
-Accepted (revised 2026-04-25).
+Accepted (revised 2026-04-25; further revised 2026-04-30 to
+catalogue new asset types introduced by ADRs 006–008).
 
 ## Context
 Our architecture coordinates multiple distinct execution
@@ -93,6 +94,35 @@ This migration is anticipated, not feared: the Phase A harness is a
 thin imperative wrapper over the same SQL/Snowpark calls Dagster
 would issue declaratively. Migration is an asset-graph rewrite, not
 a re-architecture.
+
+## Asset types introduced by ADRs 006–008
+
+The 2026-04-30 ADR additions (PII handling, right-to-erasure,
+schema and contract evolution) introduce a set of new asset and
+asset-check types that the Phase B Dagster graph must accommodate.
+Listed here so that the migration target is concrete:
+
+| Asset / check | Source ADR | Purpose |
+|---|---|---|
+| `raw_quarantine` (asset) | ADR 008 §5 | Lands ingest rows that fail upstream schema validation; downstream of `raw.proposals`, upstream of nothing — quarantine is terminal. |
+| `quarantine_check` (asset check) | ADR 008 §5 | Fails when `raw_quarantine` is non-empty for the latest partition. |
+| `_audit_erasures` (asset) | ADR 007 §4 | Append-only erasure log with pre-erasure snapshot. Access restricted to the `PRIVACY_OFFICER` role; the asset's IO manager respects this in Phase B. |
+| `erasure_cleaning_sweep` (scheduled job) | ADR 007 §2 | Rebuilds materialised derivatives downstream of an erasure batch so stale PII does not linger past the regulator's tolerated window. |
+| `classification_change_sweep` (sensor-triggered job) | ADR 006 §1 + ADR 008 §8 | Re-evaluates the PII labelling decision system when a classification module changes; rewrites masking-policy DDL; emits a per-table report. |
+| `cortex_run_log` (asset) | ADR 006 §8 + Phase 3 P3.2 | Records each pipeline run's Cortex token spend (read from `BudgetedCortex.total_tokens`) for the cost-observability path. |
+| `cortex_budget_check` (asset check) | ADR 006 §8 | Fails when total token spend exceeds the per-run cap. |
+| `pii_access_anomaly_check` (asset check) | ADR 006 §6 | Reads `ACCESS_HISTORY`; fails when access to PII columns deviates from a learned envelope. |
+| `view_filter_compliance_check` (asset check) | ADR 007 §2 | Asserts every consumer-facing view in the dbt project has a `WHERE erased = false` clause; runs as a static check over the dbt manifest. |
+| `schema_compat_check` (asset check) | ADR 008 §2 | Fails on a candidate breaking change unless an `# evolution: breaking` annotation accompanies the field change. |
+
+These assets and checks are coherent with the *Dagster as the
+asset-graph realisation of the categorical pipeline* framing: each
+new ADR introduces a new categorical primitive (visibility,
+labelling, schema version) and the orchestration layer reflects that
+in concrete asset shapes. The Phase A harness handles a strict
+subset (ingest, validate, contracts/rejections) and is silent on
+quarantine, sweeps, and audit assets; promoting to Phase B is
+partly motivated by the need to make these first-class.
 
 ## Category Model Fidelity
 Dagster's Software-Defined Asset model has a clean categorical

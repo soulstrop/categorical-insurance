@@ -1,7 +1,8 @@
 # ADR 003: Core Learners and the Role of Cortex AI
 
 ## Status
-Accepted
+Accepted (revised 2026-04-30 to record Cortex's position inside
+the Vault tokenisation boundary established by ADR 006).
 
 ## Context
 Snowflake Cortex AI provides powerful, managed machine learning models and LLMs accessible via SQL and Python. Given that our data stack is centered on Snowflake, it is tempting to use Cortex AI for the `Learner` implementations.
@@ -27,6 +28,78 @@ Cortex AI will act as non-composable functors at the absolute boundaries of our 
 1. **The Source (Unstructured Extraction):** Using Cortex LLM functions (e.g., `EXTRACT_ANSWER`) during the dbt phase to convert messy PDFs and adjuster notes into the structured `Proposal` inputs ($A$) required by our formal learners.
 2. **The Sink (Terminal Predictors):** If a user requires a standard ML model that does *not* need to propagate gradients upstream, Cortex ML functions can be used as terminal learners.
 3. **The Post-Processor (Explainability):** Using Cortex LLMs to ingest the raw JSON violations produced by the Rego governance layer and translate them into human-readable rejection letters or internal underwriting guidance.
+
+## Cortex inside the PII boundary
+
+ADR 006 establishes Vault Transform tokenisation at the staging
+boundary: direct identifiers (SSN, full name on `IndividualHolder`,
+account / payment identifiers) are tokenised before warehouse
+landing; the warehouse holds tokens, the vault holds plaintext.
+Both Cortex roles named above sit *inside* this boundary on the
+PII data path, with consequences that this ADR records explicitly.
+
+**Ingress (extraction).** The unstructured input — adjuster notes,
+PDFs, scanned documents — typically contains direct identifiers
+verbatim. Cortex `EXTRACT_ANSWER` sees this raw text. The extracted
+structured record is *not* written directly to the warehouse; its
+direct-identifier fields are routed through the Vault Transform
+encoder before landing in `stg_proposals`. The data flow is
+
+```
+RawText ─Cortex.extract─→ StructuredRecord
+        ─Vault.encode──→ TokenisedRecord
+        ─dbt.staging──→ stg_proposals
+```
+
+Cortex therefore is a **PII-handling subprocessor**: it sees
+plaintext PII transiently in memory during extraction. The
+operational consequences:
+
+* A BAA / DPA covering Cortex use is required as part of the same
+  vendor-management track as Vault.
+* The extraction call's input must not be cached or logged in any
+  Cortex-side artefact; Cortex's per-account retention settings
+  must be reviewed and locked down.
+* The Python side of the extraction call must hold plaintext only
+  in the function-local scope; no module-level caching, no
+  intermediate writes to disk, no exception messages that include
+  the input. The implementation in `catins.cortex.extract` follows
+  this discipline; CI checks the static structure for compliance.
+
+**Egress (explanation).** The rejection-letter explainer reads
+violations from the warehouse — which carry tokenised references
+to direct identifiers in the explanation context — and produces a
+letter for delivery to the consumer. Producing a meaningful letter
+requires plaintext (the consumer needs to see their own name); the
+flow is
+
+```
+warehouse ─load violations─→ ContextWithTokens
+          ─Vault.decode──→ ContextWithPlaintext
+          ─Cortex.complete→ Letter
+          ─delivery──────→ consumer / regulator
+```
+
+The plaintext-bearing `ContextWithPlaintext` and the resulting
+`Letter` are **delivery artefacts**, not warehouse artefacts. They
+are not persisted in the warehouse with full content; what *is*
+persisted (in `_audit_letters`, an analogue of ADR 007's
+`_audit_erasures`) is a token-bearing summary plus a hash of the
+letter for non-repudiation. Same boundary discipline as on ingress:
+plaintext in scope only; aggressive scrubbing on exception paths;
+no third-party logging.
+
+**Why "inside the boundary" rather than "at the boundary."** A
+naïve reading of ADR 003's "Cortex at the edges" framing would
+locate Cortex outside the PII boundary entirely. That is wrong:
+extraction takes PII as input by construction, and explanation
+returns PII to the consumer by construction. The boundary that
+matters is *the warehouse's tokenised perimeter*, and Cortex sits
+inside that perimeter on both faces of the pipeline. The
+"non-composable boundary functor" framing of the original ADR is
+preserved at the *categorical* level (Cortex is not a learner; it
+does not compose with `Cred` or `Lin`); the *operational* picture
+adds a Vault round-trip between Cortex and the warehouse.
 
 ## Category Model Fidelity
 This is the most directly faithful of the three ADRs to the Haskell
