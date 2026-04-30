@@ -14,18 +14,21 @@ more verification) is fixed.
 
 ## At-a-glance
 
-| Phase | Frame | Runtime |
-|------:|-------|---------|
-| 0 | A working categorical pipeline on a laptop | Pure Python |
-| 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB |
-| 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness |
-| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 |
-| 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra |
-| 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions |
+| Phase | Frame | Runtime | Status |
+|------:|-------|---------|--------|
+| 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
+| 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
+| 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | decided, implementation pending |
+| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.3 done; P3.4–P3.7 pending) |
+| 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
+| 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
 
 ---
 
 ## Phase 0 — MVP: a categorical pipeline on a laptop
+
+**Status: implemented** (commit `0d8970e`).
 
 **Frame.** End-to-end working pipeline running in pure Python on a
 single machine. No warehouse. No orchestrator. Synthetic data. The
@@ -105,6 +108,8 @@ locally.
 
 ## Phase 1 — Data: two learners, one real source, laws verified
 
+**Status: implemented** (commit `2908bfc`).
+
 **Frame.** The MVP grows up. A real (small) data source replaces
 synthetic fixtures; a second learner exercises composition; property
 tests verify the Haskell laws (associativity, identity, conjunctive
@@ -174,6 +179,12 @@ governance composition).
 
 ## Phase 2 — Warehouse: data and validation in Snowflake; training where ergonomic
 
+**Status: implemented** (mock-first; commits `f790e21` and
+`3e8d0c6`). Categorical surface and warehouse-native substrate
+shipped against DuckDB + dbt-duckdb + MockCortex; sandbox-time
+swap to Snowflake/Cortex sits behind the protocols established in
+the same commits.
+
 **Frame.** Data and feature engineering move into Snowflake;
 governance runs as a Snowpark UDF over warehouse data; learner
 *scoring* runs in-warehouse; learner *training* runs in external
@@ -239,6 +250,12 @@ from history rather than mutable.
 ---
 
 ## Phase 2-revisit — PII boundary, erasure, and schema versioning
+
+**Status: decided, implementation pending.** ADRs 006/007/008 land
+the design in commit `868de27`; ADR 005 categorical lift in
+`8f67112`; cross-doc consistency sweep in commits `78979e3` through
+`dab3dc8`. No implementation work yet. Production data flow is
+gated on this revisit.
 
 **Frame.** ADRs 006, 007, and 008 (2026-04-30) introduce
 operational requirements that the original Phase 2 scope did not
@@ -324,6 +341,15 @@ today.
 
 ## Phase 3 — Asset graph: lineage and checks visible to ops
 
+**Status: in progress.** P3.1 (Definitions + Resources, commit
+`a4cedec`), P3.2 (Cortex token-spend asset check, commit
+`291136b`), and P3.3 (FreshnessPolicy on terminal assets, commit
+`719bdc8`) shipped. P3.4 (schema-drift check via the canonical
+generator), P3.5 (planted-regression test for guardrail-stability),
+P3.6 (on-call runbook), P3.7 (daily ScheduleDefinition) pending.
+Phase-2-revisit follow-up checks (quarantine, classification
+sweep, etc.) are catalogued below as P3.8–P3.11 and pending.
+
 **Frame.** The pipeline graph that already exists implicitly in
 Phase 2 becomes a first-class object via Dagster Software-Defined
 Assets. Asset checks formalise the invariants we relied on
@@ -331,55 +357,73 @@ convention to maintain. Cortex generates human-readable rejection
 letters. Non-engineers gain self-service lineage and freshness via
 the Dagster UI.
 
-**In scope.**
-* Dagster project alongside the existing Phase 2 code; assets
-  defined for raw → features → proposals → state → contracts /
-  rejections.
+**In scope.** Items prefixed with **[done]** have shipped; the rest
+are pending tickets.
+* **[done]** Dagster project alongside the existing Phase 2 code;
+  assets defined for raw → features → proposals → state →
+  contracts / rejections (P3.1, commit `a4cedec`).
 * Asset checks for:
-  * Schema drift (formalizing the dbt contract generation logic into a runtime check against the Pydantic schema).
-  * Cortex token spend per run stays under budget.
-  * Guardrail-distribution stability: per-day distribution of the
+  * **[pending P3.4]** Schema drift (formalising the dbt contract
+    generation logic into a runtime check against the Pydantic
+    schema; the existing `check_schema_drift` is column-set-only
+    and will be lifted to use the canonical generator).
+  * **[done P3.2]** Cortex token spend per run stays under budget
+    (commit `291136b`; soft warning threshold on the
+    `BudgetedCortex.total_tokens` accumulator carried by the
+    Cortex resource).
+  * **[done, with planted-regression test pending P3.5]**
+    Guardrail-distribution stability: per-day distribution of the
     Phase 3 guardrail's `m` payload does not drift beyond a
-    learned envelope (per ADR 005's operational practice).
-* The first **Guardrail** in production: an additive risk score
-  with thresholded admission, using the same `Decision[M]`
-  substrate (per ADR 005). Concrete monoid:
+    learned envelope (per ADR 005's operational practice). The
+    check exists; the planted-regression demonstration that
+    discharges Phase 3 done-condition #3 is P3.5.
+* **[done]** The first **Guardrail** in production: an additive
+  risk score with thresholded admission, using the same
+  `Decision[M]` substrate (per ADR 005). Concrete monoid:
   `M = float`, `combine = +`, `empty = 0`, `adm(s) = s < cap`.
-* The validator runs as a **Joint** decision system in the product
-  monoid `list[Violation] × float`, persisting both the violation
-  list and the risk score on each contract row; admission is the
-  conjunction of components' `adm`.
-* SLA / freshness policies on key assets.
-* Cortex-based `explain_rejection` step producing a draft
-  human-readable letter from a `Violation` list and the guardrail
-  payload. (Implemented via a local mock/stub to ensure the pipeline
-  remains testable without live API tokens.)
-* On-call runbook: top three failure modes and first-step
-  responses.
+* **[done]** The validator runs as a **Joint** decision system in
+  the product monoid `list[Violation] × float`, persisting both the
+  violation list and the risk score on each contract row;
+  admission is the conjunction of components' `adm`.
+* **[done P3.3]** SLA / freshness policies on key assets (commit
+  `719bdc8`; `FreshnessPolicy.time_window(fail=24h, warn=12h)` on
+  `validated_outcomes`, `contracts`, `rejections`).
+* **[done]** Cortex-based `explain_rejection` step producing a
+  draft human-readable letter from a `Violation` list and the
+  guardrail payload (implemented via the `MockCortex` stub
+  established in Phase 2; resource-injected per P3.1).
+* **[pending P3.6]** On-call runbook: top three failure modes and
+  first-step responses.
+* **[pending P3.7]** Daily `ScheduleDefinition` for the
+  `catins_validation_job`.
 * (Phase-2-revisit follow-ups, per ADR 002's 2026-04-30
-  revision and ADRs 006/007/008.) Additional asset checks and
-  scheduled jobs:
-  * `quarantine_check` (ADR 008): fails when `raw_quarantine` is
-    non-empty for the latest partition.
-  * `pii_access_anomaly_check` (ADR 006): reads
+  revision and ADRs 006/007/008. **All pending; numbered P3.8–P3.11.**)
+  Additional asset checks and scheduled jobs:
+  * **[pending P3.8]** `quarantine_check` (ADR 008): fails when
+    `raw_quarantine` is non-empty for the latest partition.
+  * **[pending P3.9]** `pii_access_anomaly_check` (ADR 006): reads
     `ACCESS_HISTORY`; fails when access to PII columns deviates
     from a learned envelope.
-  * `erasure_latency_check` (ADR 007): SLA on time from
-    erasure-request to tombstone (tracked against CCPA's 45-day
-    window even though the system's GLBA-only scope means the
-    SLA is operational, not legal).
-  * `view_filter_compliance_check` (ADR 007): static check over
-    the dbt manifest asserting every consumer-facing view
-    filters `erased = false`.
-  * `schema_compat_check` (ADR 008): fails on candidate breaking
-    schema change without `# evolution: breaking` annotation.
-  * `erasure_cleaning_sweep` (ADR 007): scheduled Dagster job
-    that rebuilds materialised derivatives downstream of
-    erasure batches; bounds the staleness window.
-  * `classification_change_sweep` (ADR 006): sensor-triggered
-    job that re-evaluates the PII labelling decision system
-    when a classification module changes; rewrites masking
-    policies; emits a per-table report.
+  * **[pending P3.10]** `erasure_latency_check` (ADR 007): SLA on
+    time from erasure-request to tombstone (tracked against
+    CCPA's 45-day window even though the system's GLBA-only
+    scope means the SLA is operational, not legal).
+  * **[pending P3.11]** `view_filter_compliance_check` (ADR 007):
+    static check over the dbt manifest asserting every consumer-
+    facing view filters `erased = false`.
+  * **[pending Phase-2-revisit]** `schema_compat_check` (ADR 008):
+    fails on candidate breaking schema change without
+    `# evolution: breaking` annotation. (Listed here since the
+    check itself is a Dagster surface; the implementing module
+    lands in the Phase-2-revisit ticket set.)
+  * **[pending Phase-2-revisit + P3]** `erasure_cleaning_sweep`
+    (ADR 007): scheduled Dagster job that rebuilds materialised
+    derivatives downstream of erasure batches; bounds the
+    staleness window.
+  * **[pending Phase-2-revisit + P3]** `classification_change_sweep`
+    (ADR 006): sensor-triggered job that re-evaluates the PII
+    labelling decision system when a classification module
+    changes; rewrites masking policies; emits a per-table report.
 
 **Out of scope.**
 * Multi-jurisdiction policy versioning (Phase 4).
@@ -397,6 +441,10 @@ the Dagster UI.
 ---
 
 ## Phase 4 — Multi-jurisdiction at scale: versioned policy bundles, replay
+
+**Status: not started.** ADR 008 (multi-version coexistence)
+establishes the precondition; replay infrastructure itself is
+unstarted.
 
 **Frame.** The categorical insight that `Governance` is a Monoid
 becomes a product feature: every contract carries an explicit
@@ -456,6 +504,9 @@ happened?"
 ---
 
 ## Phase 5 — Distributions and audit-aware governance (research)
+
+**Status: not started.** Research-grade extensions; criteria
+exploratory.
 
 **Frame.** Implements the Outlook section of `math.tex`. Learner
 codomains lift from point estimates to distributions (Giry monad
@@ -553,6 +604,13 @@ the plan does not yet cover and which deserve their own decisions.
 Each of these likely merits an ADR before the corresponding phase
 ships.
 
+**Reading note.** Items struck through (~~like this~~) have been
+fully discharged by an ADR or implementation; they are kept in
+the list so a reader can see the original gap audit, not as
+outstanding work. Partially-discharged items remain in normal
+weight with their "*Partially discharged / Still open*" notes
+intact.
+
 1. **Data quality and freshness of inputs.** The plan covers how
    data flows through; not how to detect when upstream sources
    break. Schema validation, freshness SLAs, distribution
@@ -573,12 +631,12 @@ ships.
    history; compare contracts, rejections, financial outcomes.
    Phase 4 implements *replay for governance*; the analogous flow
    for *learners* is not in the plan. *Likely needed by Phase 4.*
-4. **PII and sensitive-data handling.** Insurance data is
+4. ~~**PII and sensitive-data handling.** Insurance data is
    regulated (financial PII, HIPAA-adjacent for health products,
    GINA for genetic information). Encryption at rest, dynamic data
-   masking, row access policies, audit logging. *Discharged by
+   masking, row access policies, audit logging.~~ **Discharged by
    ADR 006 (PII Handling) and ADR 007 (Right-to-Erasure)
-   2026-04-30.* Implementation is the Phase-2-revisit ticket set;
+   2026-04-30.** Implementation is the Phase-2-revisit ticket set;
    production data flow is gated on it.
 5. **Data retention and disaster recovery.** Snowflake `TIME
    TRAVEL` retention is bounded (default 1 day; max 90 with
@@ -597,13 +655,13 @@ ships.
    contracts, alerting wiring, runbooks, on-call rotation. Phase 3
    gestures at this; it deserves its own document. *Required by
    Phase 3.*
-8. **Schema evolution.** The Pydantic `Proposal` will grow fields
+8. ~~**Schema evolution.** The Pydantic `Proposal` will grow fields
    over time. How do you version the schema such that old
    contracts remain interpretable? `governance_version` solves
    this for policy; the analogous mechanism for proposal/contract
-   schema is not yet in the plan. *Discharged by ADR 008 (Schema
-   and Contract Evolution) 2026-04-30.* Implementation is in the
-   Phase-2-revisit ticket set.
+   schema is not yet in the plan.~~ **Discharged by ADR 008
+   (Schema and Contract Evolution) 2026-04-30.** Implementation
+   is in the Phase-2-revisit ticket set.
 9. **Incident response.** When a bad contract slips through (it
    will, eventually), what is the recovery? Quarantine table?
    Reconstructing active governance at issue time? The replay
