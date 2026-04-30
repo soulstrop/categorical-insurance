@@ -10,7 +10,7 @@ The repository is two language peers around a shared core of documentation:
 ```
 .
 ├── haskell/      idea playground (the original sketch; low ceremony)
-├── python/       production-target system (Phase 0 substrate today)
+├── python/       production-target system (Phases 0–2 implemented; Phase 3 in progress)
 └── docs/         math.tex, ADRs, PHASES.md, ARCHITECTURE.md, REFERENCES.md
 ```
 
@@ -100,54 +100,93 @@ short-cuts that the production substrate has to recover by other means.
 
 ### The Python production system (`python/`)
 
-Currently at **Phase 3** ([`docs/PHASES.md`](docs/PHASES.md)). The
-engineering substrate is fully established, including:
-- A categorical `Decision[M]` core and composable `Learner` optics (`catins/`).
-- DuckDB/Parquet integrations for persistence.
-- Snowpark-compatible Pandas vectorized UDF evaluation.
-- First-class Dagster orchestration, including asset graphs for proposals, validation, and automated asset checks against schema drift and guardrail stability.
-- A `pyproject.toml` (hatchling build, ruff, mypy `--strict`, pytest), `uv.lock` for reproducible installs, and CI workflow.
+Phases 0–2 of [`docs/PHASES.md`](docs/PHASES.md) are implemented; Phase 3
+is in progress. The categorical core and the warehouse-native Phase 2
+substrate are both in place:
 
-The conventions that recover the Haskell guarantees in a
-language without privacy or `--strict` typing as a default are in
-[`python/README.md`](python/README.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **Phase 0 — categorical core** (`catins/`): `Decision[M]` substrate
+  parameterised by a monoid protocol, composable `Learner` optics
+  (`compose`, `parallel`, `id_learner`), Pydantic `Proposal`/`Contract`/
+  `Violation`, the `Governed` comonad and `validate` co-Kleisli arrow,
+  Bühlmann credibility and online-SGD linear regression, runnable
+  `demo()` examples.
+- **Phase 1 — laws verified**: Hypothesis property tests for monoid
+  laws on every registered `Monoid[M]`, learner identity/associativity,
+  governance conjunctivity; per-learner correctness smoke tests on a
+  fixture; centralised strategy library; DuckDB/Parquet persistence.
+- **Phase 2 — warehouse-native** (this is the freshly-landed work):
+  - `WarehouseSession` Protocol with a `DuckDBSession` mock; the same
+    seam swaps in a `Snowpark.Session` at sandbox time.
+  - Real dbt project under `python/dbt/` via `dbt-duckdb`; `profiles.yml`
+    carries a `dev=duckdb` and `prod=snowflake` target.
+  - `CanonicalProposal` as the single Pydantic source of truth for the
+    proposal shape; a CI step (`mise run //python:dbt:check-drift`)
+    fails the build if the dbt source contract diverges.
+  - State reconstruction from history: append-only `state_observations`
+    table, a `current_state` SQL view doing precision-weighted
+    Bühlmann aggregation, and a `learner_state` snapshot table for
+    sequential learners.
+  - Vectorised validator registered as a struct-returning UDF on a
+    `WarehouseSession`; SQL pipeline materialises `contracts`,
+    `rejections`, and a `rejection_summary` view.
+  - `CortexClient` Protocol + `MockCortex` extract-and-complete stub +
+    `BudgetedCortex` decorator that enforces a per-run token cap and
+    exposes `total_tokens` for the upcoming Phase 3 asset check.
+  - Pipeline harness `catins/pipeline.py`: `dbt build` →
+    Cortex extraction → vectorised UDF → SQL materialisation, end-to-end.
+- **Phase 3 — asset graph and operational checks** (in progress):
+  Dagster Software-Defined Assets for the validation graph, asset
+  checks for schema drift and guardrail-distribution stability, the
+  joint product monoid `M = list[Violation] × float`, a `BudgetedCortex`-
+  backed `explain_rejection`. Token-spend asset checks, freshness
+  policies, a `Definitions` object for the UI, the daily schedule, and
+  the operational runbook are landing as the remaining Phase 3 tickets.
+
+Engineering toolchain: `pyproject.toml` (hatchling build, ruff, mypy
+`--strict`, pytest, hypothesis), `uv.lock` for reproducible installs,
+pre-commit hooks, and a CI workflow that runs lint, the dbt drift check,
+and the test suite on every push. The conventions that recover the
+Haskell guarantees in a language without privacy or `--strict` typing
+as a default are in [`python/README.md`](python/README.md) and
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## How
+
+`mise` runs in [experimental monorepo mode](https://mise.jdx.dev/configuration.html);
+each language tree carries its own `mise.toml` with tool pins and tasks,
+and the root `mise.toml` declares them as siblings. Tasks are addressed
+with the `//<tree>:<task>` syntax; `//:` addresses root-level tasks.
 
 ### Setup (once per fresh checkout)
 
 ```bash
 git clone <repo> && cd categorical-insurance
-mise trust              # one-time: trust the mise.toml files
-mise install            # installs pinned tools (python, uv, hx)
-mise run build:python   # uv sync the Python venv
-mise run setup          # installs the pre-commit git hook
-mise run test           # smoke: both languages green end-to-end
+mise trust                         # one-time: trust the mise.toml files
+mise install                       # installs pinned tools (python, uv, hx, dbt-duckdb, ...)
+mise run //python:build            # uv sync the Python venv from uv.lock
+mise run //python:setup            # installs the pre-commit git hook
+mise run //python:test             # smoke: 34 tests, full Phase 2 surface
 ```
 
 ### Daily tasks
 
 ```bash
-mise tasks              # list everything
-mise run test           # all tests across languages
-mise run lint           # all linters (ruff + mypy --strict)
-mise run fmt            # all formatters
-mise run docs:math      # build docs/math.tex to PDF
-```
-
-Per-language scoping:
-
-```bash
-mise run test:haskell    mise run test:python
-mise run lint:python     mise run fmt:python
+mise tasks --all                   # list every task across both trees
+mise run //python:test             # pytest the python project
+mise run //python:lint             # ruff + ruff-format check + mypy --strict
+mise run //python:fmt              # ruff format + ruff fix in place
+mise run //python:dbt:build        # dbt build against local DuckDB (dev profile)
+mise run //python:dbt:check-drift  # fail if _sources.yml diverges from CanonicalProposal
+mise run //haskell:test            # cabal build the Haskell sketch
+mise run //:docs:math              # build docs/math.tex to PDF
 ```
 
 Haskell demos run directly:
 
 ```bash
-mise run repl:haskell        # cabal repl, ready to import Examples.*
-mise run demo:risk           # Examples.RiskScore.demoRisk
-mise run demo:insurance      # Examples.Insurance.demo
+mise run //haskell:repl            # cabal repl, ready to import Examples.*
+mise run //haskell:demo:risk       # Examples.RiskScore.demoRisk
+mise run //haskell:demo:insurance  # Examples.Insurance.demo
 ```
 
 ### Layered governance demo (Haskell)
