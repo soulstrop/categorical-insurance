@@ -28,9 +28,21 @@ class CortexResource(ConfigurableResource):  # type: ignore[type-arg]
     Implements the ``CortexClient`` Protocol structurally so it can be
     passed wherever a ``CortexClient`` is expected. ``total_tokens`` is
     exposed for the P3.2 budget asset check.
+
+    Two thresholds are tracked:
+
+    * ``max_tokens`` — the *hard cap*. ``BudgetedCortex`` raises
+      ``BudgetExceededError`` if a call would push spend past this; the
+      raise fails the asset itself, not just the check.
+    * ``warn_utilisation`` — a *soft threshold* in [0, 1]. The
+      ``check_cortex_budget`` asset check fails when realised
+      utilisation exceeds this fraction of ``max_tokens``, even though
+      the run has not (yet) overrun. The intent is early operational
+      warning before the hard cap is hit.
     """
 
     max_tokens: int = 5_000
+    warn_utilisation: float = 0.9
 
     _client: BudgetedCortex = PrivateAttr()
 

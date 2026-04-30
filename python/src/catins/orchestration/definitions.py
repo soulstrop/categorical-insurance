@@ -18,6 +18,7 @@ from catins.orchestration.assets import (
     validated_outcomes,
 )
 from catins.orchestration.checks import (
+    check_cortex_budget,
     check_guardrail_stability,
     check_schema_drift,
 )
@@ -35,7 +36,7 @@ defs = Definitions(
         partitioned_outcomes,
         rejection_letters,
     ],
-    asset_checks=[check_schema_drift, check_guardrail_stability],
+    asset_checks=[check_schema_drift, check_guardrail_stability, check_cortex_budget],
     jobs=[catins_job],
     resources={
         "cortex": CortexResource(max_tokens=5_000),

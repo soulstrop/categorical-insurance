@@ -4,6 +4,7 @@ import pandas as pd
 from dagster import AssetCheckResult, asset_check
 
 from catins.orchestration.assets import JointProposal
+from catins.orchestration.resources import CortexResource
 
 MAX_PORTFOLIO_RISK_SCORE = 0.6
 
@@ -50,4 +51,49 @@ def check_guardrail_stability(validated_outcomes: pd.DataFrame) -> AssetCheckRes
         passed=passed,
         description=f"Mean risk score is {mean_score:.2f}",
         metadata={"mean_score": mean_score},
+    )
+
+
+@asset_check(asset="rejection_letters")
+def check_cortex_budget(cortex: CortexResource) -> AssetCheckResult:
+    """Fail when realised Cortex utilisation exceeds the soft warning threshold.
+
+    Reads ``total_tokens`` and ``budget_max`` from the same
+    ``CortexResource`` instance the rejection-letter asset wrote to —
+    Dagster manages resource lifecycle per run, so the same instance is
+    shared across all assets and checks within one materialisation.
+
+    Hard-cap overrun is signalled by the *asset* failing
+    (``BudgetedCortex`` raises ``BudgetExceededError`` mid-run). This
+    check is the *soft-threshold* warning: it fails when utilisation
+    crosses ``warn_utilisation`` of the cap, giving ops a signal to
+    raise the cap before the next run hits the hard ceiling.
+    """
+    total = cortex.total_tokens
+    cap = cortex.budget_max
+    threshold = cortex.warn_utilisation
+
+    if cap <= 0:
+        return AssetCheckResult(
+            passed=True,
+            description=f"Cortex spend {total} tokens (no cap configured)",
+            metadata={"total_tokens": total, "budget": cap, "utilisation_pct": 0.0},
+        )
+
+    utilisation = total / cap
+    passed = utilisation < threshold
+    description = (
+        f"Cortex spend {total}/{cap} tokens "
+        f"({utilisation * 100:.1f}% of cap; "
+        f"warn threshold {threshold * 100:.0f}%)"
+    )
+    return AssetCheckResult(
+        passed=passed,
+        description=description,
+        metadata={
+            "total_tokens": total,
+            "budget": cap,
+            "utilisation_pct": utilisation * 100,
+            "warn_threshold_pct": threshold * 100,
+        },
     )

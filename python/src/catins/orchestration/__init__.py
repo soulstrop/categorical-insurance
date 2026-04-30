@@ -7,6 +7,7 @@ from catins.orchestration.assets import (
     validated_outcomes,
 )
 from catins.orchestration.checks import (
+    check_cortex_budget,
     check_guardrail_stability,
     check_schema_drift,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "CortexResource",
     "WarehouseResource",
     "catins_job",
+    "check_cortex_budget",
     "check_guardrail_stability",
     "check_schema_drift",
     "defs",
