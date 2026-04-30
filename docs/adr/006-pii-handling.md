@@ -4,7 +4,9 @@
 Accepted (2026-04-30). Required prerequisite for the dbt
 `prod=snowflake` profile to be usable. Closes
 `docs/PHASES.md` "What is not yet in any phase" item #4.
-Companion to ADR 007 (Right-to-Erasure).
+Companion to ADR 007 (Right-to-Erasure). The classification scheme
+in §1 is a worked instance of the **Labelling** decision flavour
+introduced in ADR 005's 2026-04-30 extension.
 
 ## Context
 
@@ -56,6 +58,54 @@ mock targets.
 The classification is *the* source of truth: a separate YAML
 registry would be a fourth column list and re-introduce the drift
 problem the existing dbt drift check solves.
+
+#### Classification as a labelling decision system
+
+The classification scheme is a worked instance of the **Labelling**
+flavour added to ADR 005 (2026-04-30 extension). Concretely:
+
+```python
+ClassificationM = dict[FieldName, Sensitivity]
+# combine: per-field most-restrictive merge
+# empty:   {}
+# adm:     trivially True (this is a labelling, not a gate)
+
+ClassificationDecision = Schema -> ClassificationM
+```
+
+Each classification rule is a `ClassificationDecision`: one rule
+declares "every field whose name matches `*_ssn` is direct"; another
+declares "every field on `IndividualHolder` not listed elsewhere is
+quasi"; another declares "every field annotated `PII("direct", ...)`
+is direct." The decision system aggregates them via the per-field
+most-restrictive merge — a field declared `quasi` by one rule and
+`direct` by another resolves to `direct`.
+
+This buys three things:
+
+* The dbt YAML generator becomes a **single function**: evaluate the
+  classification system over `CanonicalProposal`, then emit
+  `MASKING POLICY` (Enterprise) or view-based emulation (Standard /
+  DuckDB) per `(field, sensitivity)` result. Generator and runtime
+  agree by construction — same decision system feeds both.
+* A new state law that re-classifies a field is **a new decision
+  module**, not a generator surgery. The pattern matches how
+  governance and guardrails absorb new regulations.
+* The classification itself becomes **replayable** (Phase 4): "what
+  was the PII classification of this field on this date?" is a
+  decision-system evaluation against the historical rule set, the
+  same arithmetic that answers analogous questions for governance
+  bundles.
+
+A `# math: math.tex §VI labelling instance` annotation on the
+classification module makes the categorical correspondence explicit.
+
+A note on access control: it stays delegated to Snowflake's policy
+engine per §5 below; ADR 005's *What this framework does not cover*
+section records why the categorical substrate is the wrong layer for
+that concern. Classification (a labelling) and visibility (a guardrail
+flavour, see ADR 007) are within the substrate; access control is
+not.
 
 ### 2. Holder type model
 
@@ -288,8 +338,10 @@ the token from the same provider. The Vault client in
 
 * `docs/PHASES.md` "What is not yet in any phase" item #4 (the
   prerequisite this ADR discharges).
+* ADR 005 (2026-04-30 extension) — Labelling decision flavour, of
+  which §1's classification scheme is the worked instance.
 * ADR 007 — right-to-erasure.
-* ADR 008 — schema and contract evolution (forthcoming).
+* ADR 008 — schema and contract evolution.
 * HashiCorp Vault Transform secret engine documentation.
 * Snowflake Dynamic Data Masking, Row Access Policies, and
   ACCOUNT_USAGE.ACCESS_HISTORY documentation.
