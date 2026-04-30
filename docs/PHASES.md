@@ -238,6 +238,90 @@ from history rather than mutable.
 
 ---
 
+## Phase 2-revisit — PII boundary, erasure, and schema versioning
+
+**Frame.** ADRs 006, 007, and 008 (2026-04-30) introduce
+operational requirements that the original Phase 2 scope did not
+account for. They were identified during a consistency audit after
+Phase 2 shipped its categorical and warehouse-native pieces. The
+categorical core and the substrate from Phase 2 remain unchanged;
+this revisit adds the privacy and evolution machinery that wraps
+them. Production data flow is gated on this revisit; the existing
+Phase 2 substrate is exercisable against synthetic / mock data
+today.
+
+**In scope.**
+* `PII` field marker (`catins.privacy`); CI check that every new
+  sensitive field is annotated.
+* `IndividualHolder | EntityHolder` discriminated union on
+  `CanonicalProposal.holder`.
+* `schema_version: int = 1`, `schema_effective_date: date`, and
+  `erased: bool = False` fields on `Proposal` and `Contract`.
+* `catins.schema_evolution` package: `parse_proposal`
+  discriminated-union dispatch; `compatibility_check` CI helper
+  for additive-vs-breaking detection.
+* `catins.privacy` package: classification helpers, Vault
+  Transform client (`hvac`), tokenisation round-trip.
+* `vault/` config-as-code tree at the monorepo root: transform-
+  engine roles and transformations.
+* `fnox.toml` for secret resolution; CI updated to invoke through
+  `fnox exec`.
+* dbt project extensions:
+  * `models/marts/v_proposals.sql`, `v_contracts.sql` — canonical
+    filtered views with `WHERE erased = false` and masking
+    applied.
+  * `models/raw/raw_quarantine.sql` — schema-validation failure
+    landing.
+  * `models/audit/_audit_erasures.sql` — privacy-officer access
+    only.
+  * Per-target compilation macros: `compile_grants.sql`,
+    `compile_masking.sql`, `feature_set.sql`. Three targets —
+    Enterprise (real DDM + RAP), Standard (view-emulation),
+    DuckDB (mock).
+  * Generic dbt test `test_view_filters_erased.sql` asserting
+    every consumer-facing view filters `erased = false`.
+* `catins.dbt` extensions: classification-aware YAML generation;
+  drift check fails on a candidate breaking schema change unless an
+  `# evolution: breaking` annotation accompanies it.
+* New CI steps:
+  * `mise run //python:schema:compat-check` — runs
+    `compatibility_check` against the previous-commit schema.
+  * Vault round-trip tests (mock layer + real Vault behind
+    `pytest.mark.vault`).
+  * Masking-policy parity tests (DuckDB view-emulation produces
+    the same masked rows that prod-tier `MASKING POLICY` would,
+    on every classified field).
+* Pipeline harness updated: `Cortex output → Vault tokenisation →
+  warehouse landing` on ingress; `Vault detokenisation → Cortex
+  letter generation → delivery` on egress.
+
+**Out of scope.**
+* Snowflake Enterprise deployment itself (sandbox-time activity).
+* Real Vault Enterprise cluster (sandbox-time; CI uses a
+  containerised dev Vault for round-trip tests).
+* Real Cortex calls (CI uses `MockCortex`).
+* Backfill of `schema_version: 1` across already-existing data
+  (a separate one-time migration ticket).
+
+**Done conditions.**
+1. CI green: lint, drift check, schema-compat check, Vault
+   round-trip tests, masking-policy parity tests, full pytest.
+2. A proposal flowing through the pipeline cannot land a direct
+   identifier in the warehouse — only a tokenised reference.
+3. An erased row is invisible through the consumer-facing view and
+   visible through the privacy-officer audit table; both
+   asserted by tests.
+4. A breaking schema change without the `# evolution: breaking`
+   annotation fails CI; with the annotation it passes and
+   surfaces a schema-review-board notification.
+5. Dev-tier view-emulation produces the same masked outputs that
+   prod-tier `MASKING POLICY` would, on every classified field,
+   in parity tests (one assertion per `(field, role)` pair).
+6. A non-empty `raw_quarantine` partition is detected by an asset
+   check (Phase 3) and surfaces a runbook entry.
+
+---
+
 ## Phase 3 — Asset graph: lineage and checks visible to ops
 
 **Frame.** The pipeline graph that already exists implicitly in
@@ -272,6 +356,30 @@ the Dagster UI.
   remains testable without live API tokens.)
 * On-call runbook: top three failure modes and first-step
   responses.
+* (Phase-2-revisit follow-ups, per ADR 002's 2026-04-30
+  revision and ADRs 006/007/008.) Additional asset checks and
+  scheduled jobs:
+  * `quarantine_check` (ADR 008): fails when `raw_quarantine` is
+    non-empty for the latest partition.
+  * `pii_access_anomaly_check` (ADR 006): reads
+    `ACCESS_HISTORY`; fails when access to PII columns deviates
+    from a learned envelope.
+  * `erasure_latency_check` (ADR 007): SLA on time from
+    erasure-request to tombstone (tracked against CCPA's 45-day
+    window even though the system's GLBA-only scope means the
+    SLA is operational, not legal).
+  * `view_filter_compliance_check` (ADR 007): static check over
+    the dbt manifest asserting every consumer-facing view
+    filters `erased = false`.
+  * `schema_compat_check` (ADR 008): fails on candidate breaking
+    schema change without `# evolution: breaking` annotation.
+  * `erasure_cleaning_sweep` (ADR 007): scheduled Dagster job
+    that rebuilds materialised derivatives downstream of
+    erasure batches; bounds the staleness window.
+  * `classification_change_sweep` (ADR 006): sensor-triggered
+    job that re-evaluates the PII labelling decision system
+    when a classification module changes; rewrites masking
+    policies; emits a per-table report.
 
 **Out of scope.**
 * Multi-jurisdiction policy versioning (Phase 4).
@@ -450,7 +558,11 @@ ships.
    break. Schema validation, freshness SLAs, distribution
    monitoring (Great Expectations, Anomalo, custom SQL checks).
    For learners that drift with input quality, this is upstream of
-   every guarantee we make. *Likely needed by Phase 2.*
+   every guarantee we make. *Partially discharged:* schema
+   validation and quarantine in ADR 008; freshness SLAs in Phase 3
+   asset checks. *Still open:* distribution monitoring of upstream
+   inputs (the "is this batch like the training distribution"
+   question, distinct from output guardrail-stability).
 2. **Model performance monitoring** (distinct from governance).
    "The model is running" ≠ "the model is any good." Calibration,
    prediction-interval coverage, holdout accuracy by cohort. For
@@ -464,9 +576,10 @@ ships.
 4. **PII and sensitive-data handling.** Insurance data is
    regulated (financial PII, HIPAA-adjacent for health products,
    GINA for genetic information). Encryption at rest, dynamic data
-   masking, row access policies, audit logging. None of the ADRs
-   touch this. *Compliance will require a dedicated ADR before
-   Phase 2.*
+   masking, row access policies, audit logging. *Discharged by
+   ADR 006 (PII Handling) and ADR 007 (Right-to-Erasure)
+   2026-04-30.* Implementation is the Phase-2-revisit ticket set;
+   production data flow is gated on it.
 5. **Data retention and disaster recovery.** Snowflake `TIME
    TRAVEL` retention is bounded (default 1 day; max 90 with
    Enterprise edition). Long-term archival (`FAILSAFE`, S3
@@ -488,8 +601,9 @@ ships.
    over time. How do you version the schema such that old
    contracts remain interpretable? `governance_version` solves
    this for policy; the analogous mechanism for proposal/contract
-   schema is not yet in the plan. *Likely needed by Phase 2 and
-   acutely by Phase 4.*
+   schema is not yet in the plan. *Discharged by ADR 008 (Schema
+   and Contract Evolution) 2026-04-30.* Implementation is in the
+   Phase-2-revisit ticket set.
 9. **Incident response.** When a bad contract slips through (it
    will, eventually), what is the recovery? Quarantine table?
    Reconstructing active governance at issue time? The replay
@@ -517,8 +631,12 @@ ships.
 14. **Data contracts with upstream producers.** If raw data comes
     from a claims system, an underwriting system, or an external
     feed, what guarantees do we have? Schema breaks upstream are a
-    common incident vector. *Useful at Phase 2; required by
-    Phase 3.*
+    common incident vector. *Partially discharged by ADR 008 §5
+    (consumer-side ingest validation with quarantine as
+    operational baseline; bilateral dbt contracts as architectural
+    target).* Implementation of the consumer-side baseline is in
+    the Phase-2-revisit ticket set; bilateral contracts with
+    producers remain open and require producer-team engagement.
 15. **Open-source posture.** Whether the framework is to be
     published under an open licence, alongside an academic paper,
     or kept internal. Influences ABI stability, public docs, and
