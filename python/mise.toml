@@ -53,3 +53,11 @@ run = "uv run dbt debug --project-dir dbt --profiles-dir dbt"
 [tasks."dbt:check-drift"]
 description = "Fail if dbt _sources.yml drifts from CanonicalProposal"
 run = "uv run python -m catins.dbt"
+
+[tasks."dagster:validate"]
+description = "Validate the Dagster Definitions object (catches asset-graph misconfiguration in <1s)"
+run = "uv run dagster definitions validate -m catins.orchestration.definitions"
+
+[tasks."dagster:dev"]
+description = "Run dagster dev against the catins Definitions (interactive UI)"
+run = "uv run dagster dev -m catins.orchestration.definitions"

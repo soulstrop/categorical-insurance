@@ -10,12 +10,23 @@ from catins.orchestration.checks import (
     check_guardrail_stability,
     check_schema_drift,
 )
+from catins.orchestration.definitions import (
+    CATINS_VALIDATION_JOB_NAME,
+    catins_job,
+    defs,
+)
+from catins.orchestration.resources import CortexResource, WarehouseResource
 
 __all__ = [
-    "raw_proposals",
-    "validated_outcomes",
-    "partitioned_outcomes",
-    "rejection_letters",
+    "CATINS_VALIDATION_JOB_NAME",
+    "CortexResource",
+    "WarehouseResource",
+    "catins_job",
     "check_guardrail_stability",
     "check_schema_drift",
+    "defs",
+    "partitioned_outcomes",
+    "raw_proposals",
+    "rejection_letters",
+    "validated_outcomes",
 ]

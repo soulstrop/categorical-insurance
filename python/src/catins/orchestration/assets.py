@@ -5,16 +5,11 @@ from typing import Any
 import pandas as pd
 from dagster import AssetOut, asset, multi_asset
 
-from catins.cortex import BudgetedCortex, MockCortex, explain_rejection
+from catins.cortex import explain_rejection
 from catins.models import CanonicalProposal, Violation
 from catins.monoid import ListMonoid, RiskScoreMonoid, product_monoid
+from catins.orchestration.resources import CortexResource
 from catins.snowpark import vectorize_validator
-
-# Module-level Cortex client. Phase 3 P3.1 will replace this with a
-# Dagster resource so the underlying client (Mock vs real Cortex) is a
-# deployment-time switch rather than an import-time constant.
-CORTEX_BUDGET_TOKENS = 5_000
-default_cortex = BudgetedCortex(MockCortex(), max_tokens=CORTEX_BUDGET_TOKENS)
 
 # JointProposal is an alias for CanonicalProposal: the Phase 2/3 joint
 # (Governance × Guardrail) decision system operates over the canonical
@@ -119,18 +114,14 @@ def partitioned_outcomes(validated_outcomes: pd.DataFrame) -> tuple[pd.DataFrame
 
 
 @asset
-def rejection_letters(rejections: pd.DataFrame) -> pd.DataFrame:
-    """Generate human-readable rejection letters via Cortex mock."""
+def rejection_letters(rejections: pd.DataFrame, cortex: CortexResource) -> pd.DataFrame:
+    """Generate human-readable rejection letters via the Cortex resource."""
     letters = []
     for _, row in rejections.iterrows():
-        # Payload is (list[dict], float) because of serialization
+        # Payload is (list[dict], float) after JSON-friendly serialisation.
         violations_dicts, risk_score = row["payload"]
-
-        # Rehydrate Pydantic models for the explain function
-        # Or we can just pass the dicts directly if the cortex stub handles it
         violations = [Violation(**v) for v in violations_dicts]
-
-        letter = explain_rejection(default_cortex, violations, risk_score)
+        letter = explain_rejection(cortex, violations, risk_score)
         letters.append(letter)
 
     df = rejections.copy()

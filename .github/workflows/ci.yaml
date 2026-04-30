@@ -22,6 +22,7 @@ jobs:
         run: |
           mise run //python:lint
           mise run //python:dbt:check-drift
+          mise run //python:dagster:validate
           mise run //python:test
 
   # Haskell Job
