@@ -100,9 +100,12 @@ short-cuts that the production substrate has to recover by other means.
 
 ### The Python production system (`python/`)
 
-Phases 0–2 of [`docs/PHASES.md`](docs/PHASES.md) are implemented; Phase 3
-is in progress. The categorical core and the warehouse-native Phase 2
-substrate are both in place:
+Phases 0–2 of [`docs/PHASES.md`](docs/PHASES.md) are implemented as
+originally scoped; Phase 3 is in progress. ADRs 006–008 (2026-04-30)
+introduce a **Phase-2-revisit ticket set** — PII handling, right-to-
+erasure, and schema/contract evolution — that is decided but not yet
+implemented; production data flow is gated on it. The categorical
+core and the warehouse-native Phase 2 substrate are both in place:
 
 - **Phase 0 — categorical core** (`catins/`): `Decision[M]` substrate
   parameterised by a monoid protocol, composable `Learner` optics
@@ -134,6 +137,17 @@ substrate are both in place:
     exposes `total_tokens` for the upcoming Phase 3 asset check.
   - Pipeline harness `catins/pipeline.py`: `dbt build` →
     Cortex extraction → vectorised UDF → SQL materialisation, end-to-end.
+  - **Decided, implementation pending** (ADRs 006–008): `PII` field
+    marker on `CanonicalProposal` driving Vault Transform tokenisation
+    of direct identifiers at ingest, Snowflake DDM (or view-emulation
+    in dev/mock) for quasi-identifiers at read, RBAC + ABAC access,
+    `ACCESS_HISTORY` + selective SIEM forwarding for audit, fnox
+    secret resolution; tombstone-with-PII-null erasure with view-layer
+    visibility filter and US-GLBA-only scope; `schema_version` on every
+    row, version-specific Pydantic models, view-layer cross-version
+    projection, and ingest-side validation with a `raw_quarantine`
+    table. Categorically, classification is a labelling and erasure
+    visibility is a guardrail per ADR 005's 2026-04-30 extension.
 - **Phase 3 — asset graph and operational checks** (in progress):
   Dagster Software-Defined Assets for the validation graph, asset
   checks for schema drift and guardrail-distribution stability, the
@@ -225,8 +239,11 @@ product monoid `M = ([Violation], RiskScore)` — making math.tex §VI's
 
 | Document | What |
 |---|---|
-| [`docs/math.tex`](docs/math.tex) | Formal mathematical companion (LaTeX/IEEEtran, build with `mise run docs:math`) |
-| [`docs/adr/`](docs/adr/) | Five architecture decision records (governance locality, orchestration, learners vs Cortex, decision systems, governance vs guardrails) |
+| [`docs/math.tex`](docs/math.tex) | Formal mathematical companion (LaTeX/IEEEtran, build with `mise run //:docs:math`) |
+| [`docs/adr/001`](docs/adr/001-governance-locality.md) – [`005`](docs/adr/005-governance-vs-guardrails.md) | Categorical-core ADRs: governance locality, orchestration, learners vs Cortex, decision systems, governance/guardrails/visibility/labelling |
+| [`docs/adr/006-pii-handling.md`](docs/adr/006-pii-handling.md) | PII handling: classification, Vault tokenisation, DDM, RBAC + ABAC, ACCESS_HISTORY + SIEM, dual-tier dev/prod, fnox secret resolution |
+| [`docs/adr/007-right-to-erasure.md`](docs/adr/007-right-to-erasure.md) | Right-to-erasure: tombstone-with-PII-null, view-layer visibility filter, US-GLBA-only scope, separate `_audit_erasures` table |
+| [`docs/adr/008-schema-and-contract-evolution.md`](docs/adr/008-schema-and-contract-evolution.md) | Schema and contract evolution: integer + date versioning, multi-version coexistence across majors, ingest quarantine, tiered governance |
 | [`docs/PHASES.md`](docs/PHASES.md) | Phased rollout plan (laptop MVP → multi-jurisdiction with replay → audit-aware research extensions) |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Production system architecture on Snowflake |
 | [`docs/REFERENCES.md`](docs/REFERENCES.md) | Bibliography of underlying papers |
