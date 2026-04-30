@@ -31,7 +31,12 @@ graph TD
         TriggerDBT[dbt Assets]
         TriggerML[Snowpark ML Assets]
         TriggerGov[Validation Assets]
+        TriggerSweep[Sweep & Audit Jobs<br/>ADRs 006/007]
     end
+
+    %% Self-managed Vault Enterprise sits outside Snowflake; it is the
+    %% PII tokenisation boundary on both ingress and egress.
+    Vault[[Vault Transform tokenisation<br/>self-managed Enterprise<br/>ADR 006]]
 
     subgraph Snowflake ["Snowflake (Zero Data-Movement Execution)"]
         direction TB
@@ -39,15 +44,17 @@ graph TD
         %% Data Sources & Prep
         Raw[(Raw Unstructured Data)]
         CortexExtract[Cortex AI: LLM Extraction]
-        RawSQL[(Raw Tables)]
+        RawSQL[(Raw Tables<br/>tokenised)]
         DBT[dbt: Feature Engineering]
-        Proposals[(Proposals)]
+        Quarantine[(raw_quarantine<br/>schema-validation failures<br/>ADR 008)]
+        Proposals[(Proposals<br/>+ schema_version + erased)]
         Observations[(Observations<br/>append-only)]
         StateView[(Learner State<br/>derived view)]
 
-        Raw --> CortexExtract --> DBT
+        Raw --> CortexExtract
         RawSQL --> DBT
         DBT --> Proposals
+        DBT -. validation failure .-> Quarantine
         Observations --> StateView
 
         %% Learners Category
@@ -59,8 +66,8 @@ graph TD
         StateView --> Learner
 
         %% Decision systems parameterised by a monoid
-        subgraph DecisionSubgraph ["Decision Systems (ADR 004): Decision m = p → m"]
-            ValidateUDF["Snowpark Vectorized UDF: validate_M<br/>M ∈ {Violations, RiskScore, joint product, ...}"]
+        subgraph DecisionSubgraph ["Decision Systems (ADR 004 + 005 ext): Decision m = p → m"]
+            ValidateUDF["Snowpark Vectorized UDF: validate_M<br/>M ∈ {Violations, RiskScore, Joint,<br/>Visibility (ADR 007), Classification (ADR 006)}"]
         end
 
         Learner --> ValidateUDF
@@ -73,12 +80,31 @@ graph TD
         ValidateUDF -->|adm m| Contracts
         ValidateUDF -->|¬ adm m| Rejections
         Rejections --> CortexExplain
+
+        %% Consumer-facing surface: views with erasure filter + masking policies
+        Views[Consumer-facing Views<br/>v_proposals, v_contracts<br/>WHERE NOT erased + masking<br/>ADR 007 §2]
+        Proposals --> Views
+        Contracts --> Views
+
+        %% Audit surface for tombstoned PII
+        AuditErasures[(_audit_erasures<br/>privacy-officer only<br/>ADR 007)]
+        Proposals -. tombstone .-> AuditErasures
     end
+
+    %% Cross-boundary edges: Cortex sits inside the PII boundary on
+    %% both faces (ADR 003 revised). Extracted records are tokenised
+    %% before warehouse landing; rejection-letter generation decodes
+    %% from Vault for delivery only, never persisting plaintext in
+    %% the warehouse.
+    CortexExtract --> Vault
+    Vault --> RawSQL
+    Vault -. decode for delivery .-> CortexExplain
 
     %% Orchestration edges
     TriggerDBT -.->|Executes SQL| DBT
     TriggerML -.->|Executes Python| Learners
     TriggerGov -.->|Executes Vectorized UDF| DecisionSubgraph
+    TriggerSweep -.->|erasure cleaning,<br/>classification rebuild| AuditErasures
 ```
 
 ## Concept Mapping
@@ -166,7 +192,12 @@ graph TD
     `Proposal` formats expected by the learners. The `Proposal` schema
     is Pydantic at the Python boundary and a `dbt` source contract at
     the SQL boundary; the two are generated from one source so they
-    cannot drift (Phase 2).
+    cannot drift (Phase 2). The same source-of-truth Pydantic model
+    also drives PII classification (ADR 006 §1) and the
+    `MASKING POLICY` / view-emulation DDL emitted per target tier
+    (ADR 006 §7) — one classification labelling decision system
+    feeds runtime, the dbt YAML generator, and the masking-policy
+    compiler.
 
 ### 7. Orchestration
 *   **Haskell:** In-memory execution or manual GHCi REPL steps.
@@ -190,11 +221,69 @@ graph TD
 *   `Cortex` post-processing of rejection payloads produces
     human-readable rejection letters from a violation list and the
     `m` payload — also a boundary functor; not composed with learners.
+*   Cortex sits **inside the Vault tokenisation boundary** on both
+    faces (ADR 003 revised, ADR 006). Extraction reads raw text
+    containing direct identifiers; the structured output is routed
+    through `Vault.encode` before warehouse landing. Explanation
+    reads tokenised violations from the warehouse and decodes via
+    Vault to render letter content for delivery; the plaintext
+    rendered letter is a delivery artefact, not a warehouse
+    artefact. Cortex is therefore a **PII-handling subprocessor**
+    requiring the same vendor-management discipline as Vault
+    (BAA / DPA, no caching, no logging of plaintext in scope).
 *   See ADR 003 for the discipline that keeps Cortex out of the
     categorical core. The reasoning, summarised: Cortex models do not
     expose a `request` map, so they cannot participate in sequential
     composition; we use them only at the inlet and outlet, where
     composition with learners is not required.
+
+### 9. Privacy and Boundaries
+Three intersecting concerns shape the runtime PII story; each has a
+dedicated ADR and each surfaces in the diagram above.
+
+*   **Classification (ADR 006).** The Pydantic `CanonicalProposal`
+    annotates each field with a `PII` marker (direct, quasi,
+    financial, health) and the regulatory regimes that apply.
+    Annotation lives next to the type and is the single source of
+    truth — for the dbt source-contract generator, the masking-
+    policy compiler, the Vault role-to-field mapping, and the
+    audit-snapshot scrubber. CI fails on a new sensitive field that
+    lacks classification. Categorically this is a *labelling*
+    decision system per math.tex §VI (ADR 005 extension); operationally
+    it is the metadata that drives every protection mechanism below.
+*   **Protection at rest (ADR 006).** Direct identifiers tokenise at
+    ingest via the self-managed Vault Enterprise Transform engine;
+    quasi-identifiers are masked at read time via Snowflake Dynamic
+    Data Masking on the Enterprise tier or via view-based emulation
+    on the Standard / DuckDB tiers. The hot read path is DDM-only;
+    the vault is touched at ingest and at the rare delivery-time
+    decode (rejection letters).
+*   **Visibility (ADR 007).** The view-layer filter
+    `WHERE erased = false` is the consumer-facing realisation of a
+    *visibility guardrail* — a decision system valued in a
+    visibility lattice with meet monoid and per-query admission. The
+    erasure tombstone is the data primitive on which the visibility
+    decision evaluates. Adding a new visibility rule (litigation
+    hold, claims hold) is one new decision module composing via the
+    meet monoid; the view layer's `WHERE` clause is regenerated by
+    the dbt macro.
+*   **Schema evolution (ADR 008).** Every persisted proposal and
+    contract carries `schema_version` and `schema_effective_date`.
+    Version-specific Pydantic models (`ProposalV1`, `ProposalV2`)
+    parse versioned rows; SQL view-layer projection (`v_proposals`)
+    presents a uniform shape across versions for analytical
+    consumers. Erased rows are immutable across versions; the
+    `_audit_erasures` snapshot carries the version that was erased.
+*   **Access control (delegated).** Snowflake DDM and Row Access
+    Policies enforce who-sees-what at planner cost. ADR 005's 2026-
+    04-30 extension records the line: the categorical substrate is
+    not the right layer for access control; the warehouse policy
+    engine is.
+*   **Secret resolution (delegated to fnox).** Snowflake credentials,
+    Vault tokens, and SIEM API keys all flow through fnox env-var
+    injection. Code reads `os.environ`; fnox sources from age-
+    encrypted git in dev, from cloud secret manager in CI and prod.
+    Same `mise run` invocation everywhere.
 
 ## References
 
@@ -212,5 +301,19 @@ graph TD
   Python and DMN as peer authoring surfaces; Rego considered, not
   adopted.
 * `docs/adr/005-governance-vs-guardrails.md` — Governance and
-  Guardrails as monoid choices on the same substrate.
+  Guardrails as monoid choices on the same substrate; the
+  2026-04-30 extension adds Visibility (worked instance: erasure)
+  and Labelling (worked instance: PII classification) as further
+  flavours.
+* `docs/adr/006-pii-handling.md` — PII classification, Vault
+  tokenisation, DDM, RBAC + ABAC, ACCESS_HISTORY + SIEM, dual-tier
+  dev/prod via classification-driven generators, fnox secret
+  resolution.
+* `docs/adr/007-right-to-erasure.md` — tombstone-with-PII-null,
+  view-layer visibility filter, US-GLBA-only scope, irreversible
+  and idempotent semantics, separate `_audit_erasures` table.
+* `docs/adr/008-schema-and-contract-evolution.md` — integer + date
+  versioning, hybrid additive-within-major + multi-version
+  coexistence across majors, `schema_version` on every row,
+  ingest-side validation with quarantine, tiered governance.
 * `docs/PHASES.md` — staged rollout from MVP to this architecture.
