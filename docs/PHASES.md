@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -292,6 +292,17 @@ Implementation in progress:
   production callers; tests construct their own registry to
   exercise multi-version dispatch in isolation. P2R.11 wires
   `QuarantineRow` instances into the `raw_quarantine` table.
+* The compat-check (`catins.schema_evolution.compat`): snapshots
+  `Proposal` / `CanonicalProposal` / `IndividualHolder` /
+  `EntityHolder` into `schema_baseline.json` and classifies any
+  diff against the in-tree state as additive (safe) or breaking
+  (field removed, type changed, optional→required, required field
+  added). Breaking changes pass only when the `# evolution:
+  breaking` annotation is present in `catins/models.py` — the
+  marker P2R.3 placed in CanonicalProposal's docstring is the
+  worked example. Two new mise tasks: `//python:schema:compat-check`
+  (CI gate) and `//python:schema:write-baseline` (regenerate
+  alongside a breaking change).
 
 Production data flow is still gated on the rest of the revisit.
 

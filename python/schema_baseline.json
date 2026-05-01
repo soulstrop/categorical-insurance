@@ -1,0 +1,70 @@
+{
+  "CanonicalProposal": {
+    "age": {
+      "required": true,
+      "type": "int"
+    },
+    "erased": {
+      "required": false,
+      "type": "bool"
+    },
+    "holder_kind": {
+      "required": false,
+      "type": "Literal['individual', 'entity']"
+    },
+    "holder_name": {
+      "required": true,
+      "type": "str"
+    },
+    "premium": {
+      "required": true,
+      "type": "float"
+    },
+    "schema_effective_date": {
+      "required": false,
+      "type": "date"
+    },
+    "schema_version": {
+      "required": false,
+      "type": "int"
+    },
+    "zip_code": {
+      "required": true,
+      "type": "str"
+    }
+  },
+  "EntityHolder": {
+    "kind": {
+      "required": false,
+      "type": "Literal['entity']"
+    },
+    "name": {
+      "required": true,
+      "type": "str"
+    }
+  },
+  "IndividualHolder": {
+    "kind": {
+      "required": false,
+      "type": "Literal['individual']"
+    },
+    "name": {
+      "required": true,
+      "type": "str"
+    }
+  },
+  "Proposal": {
+    "erased": {
+      "required": false,
+      "type": "bool"
+    },
+    "schema_effective_date": {
+      "required": false,
+      "type": "date"
+    },
+    "schema_version": {
+      "required": false,
+      "type": "int"
+    }
+  }
+}

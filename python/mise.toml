@@ -54,6 +54,14 @@ run = "uv run dbt debug --project-dir dbt --profiles-dir dbt"
 description = "Fail if dbt _sources.yml drifts from CanonicalProposal"
 run = "uv run python -m catins.dbt"
 
+[tasks."schema:compat-check"]
+description = "Fail if catins.models drifts from schema_baseline.json without `# evolution: breaking` annotation"
+run = "uv run python -m catins.schema_evolution.compat"
+
+[tasks."schema:write-baseline"]
+description = "Regenerate schema_baseline.json from the current catins.models state (commit it after a breaking change)"
+run = "uv run python -m catins.schema_evolution.compat --write"
+
 [tasks."dagster:validate"]
 description = "Validate the Dagster Definitions object (catches asset-graph misconfiguration in <1s)"
 run = "uv run dagster definitions validate -m catins.orchestration.definitions"
