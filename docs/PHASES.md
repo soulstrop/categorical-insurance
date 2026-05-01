@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -316,6 +316,20 @@ Implementation in progress:
   consumers that need the conditional semantic consult the union
   branches (`IndividualHolder` vs `EntityHolder`) directly, both
   of which appear in the report independently.
+* The tokenisation seam (`catins.privacy.tokenisation`):
+  `TokenisationClient` Protocol shaped to ``hvac``'s Vault Transform
+  API (`tokenise(plaintext, transformation)`,
+  `detokenise(token, transformation)`); `MockTokenisationClient` is
+  a deterministic, alphabet-preserving (per-position char-class
+  survives), reversible (in-process map) implementation for
+  dev/tests. `tokenise_model(model, client)` /
+  `detokenise_model(model, client)` walk the model's PII
+  annotations and operate only on direct-PII string fields per
+  ADR 006 §2 (quasi-PII like ZIP/age is handled by masking at
+  read time; not tokenised). Per-field transformation namespaces
+  by default so a leak of one field's transformation keys doesn't
+  compromise the others. Production swap is a single resource
+  binding — the asset code calls the same Protocol either way.
 
 Production data flow is still gated on the rest of the revisit.
 

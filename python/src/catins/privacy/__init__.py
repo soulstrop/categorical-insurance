@@ -18,15 +18,25 @@ from catins.privacy.pii import (
     non_pii_fields,
     pii_fields,
 )
+from catins.privacy.tokenisation import (
+    MockTokenisationClient,
+    TokenisationClient,
+    detokenise_model,
+    tokenise_model,
+)
 
 __all__ = [
     "PII",
     "FieldClassification",
+    "MockTokenisationClient",
     "ModelClassification",
     "PIICategory",
+    "TokenisationClient",
     "classify_models",
     "classify_table",
+    "detokenise_model",
     "is_pii",
     "non_pii_fields",
     "pii_fields",
+    "tokenise_model",
 ]
