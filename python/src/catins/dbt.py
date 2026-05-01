@@ -10,7 +10,7 @@ committed file for drift.
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args, get_origin
 
 import yaml
 from pydantic import BaseModel
@@ -29,6 +29,12 @@ def _columns_for(model_cls: type[BaseModel]) -> list[dict[str, Any]]:
     columns: list[dict[str, Any]] = []
     for field_name, field_info in model_cls.model_fields.items():
         annotation = field_info.annotation
+        # Unwrap Literal[v1, v2, ...] to its underlying scalar type. The
+        # warehouse stores a Literal column as the literal values' type
+        # (typically str / VARCHAR for discriminator fields).
+        if get_origin(annotation) is Literal:
+            literal_values = get_args(annotation)
+            annotation = type(literal_values[0])
         if annotation is str:
             type_str = "str"
         elif annotation is float:

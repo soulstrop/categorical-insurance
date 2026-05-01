@@ -5,7 +5,7 @@ Violations, enforcing the categorical abstraction barriers.
 """
 
 from datetime import date
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -47,6 +47,36 @@ class Proposal(BaseModel):
     erased: bool = False
 
 
+class IndividualHolder(BaseModel):
+    """A natural-person policy holder.
+
+    Per ADR 006 §1, an individual's name is direct PII under GLBA's
+    consumer-privacy definition. P2R.7's tokenisation client reads this
+    annotation to decide which fields to round-trip through Vault.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["individual"] = "individual"
+    name: Annotated[str, PII("direct", regimes={"GLBA"})]
+
+
+class EntityHolder(BaseModel):
+    """A business / entity policy holder.
+
+    Per ADR 006 §1, business records are NOT PII under GLBA's
+    individual-consumer definition; the name is a regular field.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["entity"] = "entity"
+    name: str
+
+
+Holder = IndividualHolder | EntityHolder
+
+
 class CanonicalProposal(Proposal):
     """The canonical Phase 2/3 proposal shape.
 
@@ -55,12 +85,55 @@ class CanonicalProposal(Proposal):
     warehouse-side reference to a proposal column. Drift between this
     model and the dbt YAML is enforced as a CI failure (see
     ``catins.dbt.check_dbt_source_drift``).
+
+    Holder representation: the warehouse stores ``holder_kind`` and
+    ``holder_name`` as flat columns; the ``.holder`` property
+    reconstructs the ``IndividualHolder | EntityHolder`` discriminated
+    union for application code per ADR 006 §1.
+
+    PII over-protection caveat: ``holder_name`` is annotated PII even
+    though entity-holder names are not PII under GLBA. The annotation
+    is unconditional on the flat column; conditional-PII annotations
+    (per-branch) live on the discriminated-union types instead, and
+    the classification report (P2R.6) consults the union types when a
+    finer-grained answer is needed.
+
+    # evolution: breaking — holder field renamed to holder_kind +
+    # holder_name in P2R.3. The compat-check in P2R.5 will read this
+    # marker to confirm the annotation is present.
     """
 
-    holder: Annotated[str, PII("direct", regimes={"GLBA"})]
+    holder_kind: Literal["individual", "entity"] = "individual"
+    holder_name: Annotated[str, PII("direct", regimes={"GLBA"})]
     premium: float
     zip_code: Annotated[str, PII("quasi", regimes={"GLBA"})]
     age: Annotated[int, PII("quasi", regimes={"GLBA"})]
+
+    @property
+    def holder(self) -> Holder:
+        """Reconstruct the typed holder from the flat columns."""
+        if self.holder_kind == "individual":
+            return IndividualHolder(name=self.holder_name)
+        return EntityHolder(name=self.holder_name)
+
+    @classmethod
+    def from_holder(cls, holder: Holder, **kwargs: Any) -> "CanonicalProposal":
+        """Construct from a typed holder + the rest of the proposal fields."""
+        return cls(holder_kind=holder.kind, holder_name=holder.name, **kwargs)
+
+
+def extraction_fields(proposal_cls: type["Proposal"]) -> list[str]:
+    """Required domain fields a flat extractor (e.g. Cortex) should populate.
+
+    Subset of :func:`proposal_domain_fields`: only the fields without
+    defaults, since defaulted fields (like the ``holder_kind``
+    discriminator) are filled in by Pydantic at model construction.
+    """
+    return [
+        f
+        for f in proposal_domain_fields(proposal_cls)
+        if proposal_cls.model_fields[f].is_required()
+    ]
 
 
 def proposal_domain_fields(proposal_cls: type["Proposal"]) -> list[str]:

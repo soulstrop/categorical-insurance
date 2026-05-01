@@ -21,7 +21,8 @@ def _seed_raw_proposals(duckdb_path: Path) -> None:
     con.execute(
         """
         CREATE OR REPLACE TABLE raw.proposals (
-            holder VARCHAR,
+            holder_kind VARCHAR,
+            holder_name VARCHAR,
             premium DOUBLE,
             zip_code VARCHAR,
             age INTEGER,
@@ -32,32 +33,27 @@ def _seed_raw_proposals(duckdb_path: Path) -> None:
         """
     )
     schema_v1_date = pd.Timestamp("2026-04-30")
+    base = {
+        "holder_kind": "individual",
+        "schema_version": 1,
+        "schema_effective_date": schema_v1_date,
+        "erased": False,
+    }
     con.register(
         "__seed_buf",
         pd.DataFrame(
             [
-                {
-                    "holder": "Alice",
-                    "premium": 100.0,
-                    "zip_code": "10001",
-                    "age": 30,
-                    "schema_version": 1,
-                    "schema_effective_date": schema_v1_date,
-                    "erased": False,
-                },
-                {
-                    "holder": "Bob",
-                    "premium": 250.0,
-                    "zip_code": "94102",
-                    "age": 45,
-                    "schema_version": 1,
-                    "schema_effective_date": schema_v1_date,
-                    "erased": False,
-                },
+                {"holder_name": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30, **base},
+                {"holder_name": "Bob", "premium": 250.0, "zip_code": "94102", "age": 45, **base},
             ]
         ),
     )
-    con.execute("INSERT INTO raw.proposals SELECT * FROM __seed_buf")
+    con.execute(
+        "INSERT INTO raw.proposals "
+        "SELECT holder_kind, holder_name, premium, zip_code, age, "
+        "       schema_version, schema_effective_date, erased "
+        "FROM __seed_buf"
+    )
     con.close()
 
 
@@ -84,10 +80,11 @@ def test_dbt_build_against_duckdb(tmp_path: Path) -> None:
 
     con = duckdb.connect(str(duckdb_path))
     rows = con.execute(
-        "SELECT holder, premium, zip_code, age FROM main.stg_proposals ORDER BY holder"
+        "SELECT holder_kind, holder_name, premium, zip_code, age "
+        "FROM main.stg_proposals ORDER BY holder_name"
     ).fetchall()
     con.close()
     assert rows == [
-        ("Alice", 100.0, "10001", 30),
-        ("Bob", 250.0, "94102", 45),
+        ("individual", "Alice", 100.0, "10001", 30),
+        ("individual", "Bob", 250.0, "94102", 45),
     ]

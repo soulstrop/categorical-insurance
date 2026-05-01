@@ -18,7 +18,12 @@ class MockCortex:
     """
 
     # Compiled patterns for the small vocabulary the harness needs.
+    # ``holder_name`` matches the post-P2R.3 schema; the older ``holder``
+    # alias is retained so callers (e.g. test_cortex) that exercise
+    # Cortex directly can still grab a name out of free text without
+    # needing to know the holder discriminator.
     _PATTERNS = {
+        "holder_name": re.compile(r"holder\s*(?:is|:)\s*([A-Za-z][A-Za-z\- ]*?)(?:[.,;]|$)", re.I),
         "holder": re.compile(r"holder\s*(?:is|:)\s*([A-Za-z][A-Za-z\- ]*?)(?:[.,;]|$)", re.I),
         "premium": re.compile(r"premium\s*(?:is|:)\s*\$?(-?\d+(?:\.\d+)?)", re.I),
         "zip_code": re.compile(r"\b(\d{5})\b"),

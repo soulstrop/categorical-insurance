@@ -15,7 +15,7 @@ Provides three interrelated capabilities:
 
 import json
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar, get_args, get_origin
 
 import pandas as pd
 import pyarrow as pa
@@ -133,6 +133,12 @@ def _duckdb_param_types(proposal_cls: type[Proposal]) -> list[str]:
     concrete = proposal_domain_fields(proposal_cls)
     for field_name in concrete:
         annotation = proposal_cls.model_fields[field_name].annotation
+        # Unwrap Literal[v1, v2, ...] to its underlying scalar type so
+        # the discriminator's Python `Literal[...]` lands as VARCHAR /
+        # BIGINT depending on the literal's element type.
+        if get_origin(annotation) is Literal:
+            literal_values = get_args(annotation)
+            annotation = type(literal_values[0])
         sql_type = _DUCKDB_TYPE_MAPPING.get(annotation)  # type: ignore[arg-type]
         if sql_type is None:
             msg = f"unsupported field type for {field_name}: {annotation}"

@@ -50,14 +50,16 @@ def test_pipeline_with_seeded_staging_table() -> None:
         pd.DataFrame(
             [
                 {
-                    "holder": "Alice",
+                    "holder_kind": "individual",
+                    "holder_name": "Alice",
                     "premium": 100.0,
                     "zip_code": "10001",
                     "age": 30,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Bob",
+                    "holder_kind": "individual",
+                    "holder_name": "Bob",
                     "premium": -50.0,
                     "zip_code": "94102",
                     "age": 25,
@@ -114,14 +116,16 @@ def _seed_raw_proposals_file(duckdb_path: Path) -> None:
         pd.DataFrame(
             [
                 {
-                    "holder": "Alice",
+                    "holder_kind": "individual",
+                    "holder_name": "Alice",
                     "premium": 100.0,
                     "zip_code": "10001",
                     "age": 30,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Bob",
+                    "holder_kind": "individual",
+                    "holder_name": "Bob",
                     "premium": 250.0,
                     "zip_code": "10001",
                     "age": 45,

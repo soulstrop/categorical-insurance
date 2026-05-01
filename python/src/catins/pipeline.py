@@ -27,7 +27,7 @@ import pandas as pd
 
 from catins.cortex import BudgetedCortex
 from catins.decision import DecisionSystem
-from catins.models import CanonicalProposal, Proposal, proposal_domain_fields
+from catins.models import CanonicalProposal, Proposal, extraction_fields
 from catins.monoid import ListMonoid, Monoid
 from catins.snowpark import register_validator, run_validation_pipeline
 from catins.warehouse import WarehouseSession
@@ -121,7 +121,10 @@ def run_pipeline[P: Proposal, M](
 
     extracted_count = 0
     if raw_texts is not None:
-        records = extract_proposals(cortex, raw_texts, fields=proposal_domain_fields(proposal_cls))
+        # Cortex extracts the *required* domain fields (no defaults);
+        # Pydantic supplies the discriminator (holder_kind defaults to
+        # "individual") and the inherited metadata fields below.
+        records = extract_proposals(cortex, raw_texts, fields=extraction_fields(proposal_cls))
         extracted_count = len(records)
         if records:
             # Cortex extracts only domain fields; validate through Pydantic

@@ -4,7 +4,11 @@ models:
   - name: stg_proposals
     description: Cleaned and typed proposal rows.
     columns:
-      - name: holder
+      - name: holder_kind
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: holder_name
         data_type: VARCHAR
         tests:
           - not_null

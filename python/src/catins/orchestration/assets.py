@@ -75,35 +75,17 @@ joint_udf = vectorize_validator(
 def raw_proposals() -> pd.DataFrame:
     """Mock ingest of unstructured data extracted via Cortex."""
     schema_v1_date = pd.Timestamp("2026-04-30")
+    base = {
+        "holder_kind": "individual",
+        "schema_version": 1,
+        "schema_effective_date": schema_v1_date,
+        "erased": False,
+    }
     return pd.DataFrame(
         [
-            {
-                "holder": "Alice",
-                "premium": 100.0,
-                "zip_code": "10001",
-                "age": 30,
-                "schema_version": 1,
-                "schema_effective_date": schema_v1_date,
-                "erased": False,
-            },
-            {
-                "holder": "Bob",
-                "premium": -50.0,
-                "zip_code": "90210",
-                "age": 25,
-                "schema_version": 1,
-                "schema_effective_date": schema_v1_date,
-                "erased": False,
-            },
-            {
-                "holder": "Charlie",
-                "premium": 250.0,
-                "zip_code": "94102",
-                "age": 20,
-                "schema_version": 1,
-                "schema_effective_date": schema_v1_date,
-                "erased": False,
-            },
+            {"holder_name": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30, **base},
+            {"holder_name": "Bob", "premium": -50.0, "zip_code": "90210", "age": 25, **base},
+            {"holder_name": "Charlie", "premium": 250.0, "zip_code": "94102", "age": 20, **base},
         ]
     )
 
@@ -111,9 +93,12 @@ def raw_proposals() -> pd.DataFrame:
 @asset(freshness_policy=ASSET_FRESHNESS)
 def validated_outcomes(raw_proposals: pd.DataFrame) -> pd.DataFrame:
     """Apply the vectorized joint decision system."""
-    # Apply UDF
+    # Apply UDF — flat domain columns (per `proposal_domain_fields`)
+    # passed in their model order: holder_kind, holder_name, premium,
+    # zip_code, age.
     results_series = joint_udf(
-        raw_proposals["holder"],
+        raw_proposals["holder_kind"],
+        raw_proposals["holder_name"],
         raw_proposals["premium"],
         raw_proposals["zip_code"],
         raw_proposals["age"],

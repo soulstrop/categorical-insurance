@@ -43,10 +43,10 @@ def test_pii_marker_equality() -> None:
 
 
 def test_pii_fields_on_canonical_proposal() -> None:
-    """Per ADR 006, holder is direct; zip_code and age are quasi."""
+    """Per ADR 006, holder_name is direct; zip_code and age are quasi."""
     fields = pii_fields(CanonicalProposal)
-    assert set(fields.keys()) == {"holder", "zip_code", "age"}
-    assert fields["holder"].category == "direct"
+    assert set(fields.keys()) == {"holder_name", "zip_code", "age"}
+    assert fields["holder_name"].category == "direct"
     assert fields["zip_code"].category == "quasi"
     assert fields["age"].category == "quasi"
     for marker in fields.values():
@@ -54,12 +54,13 @@ def test_pii_fields_on_canonical_proposal() -> None:
 
 
 def test_non_pii_fields_on_canonical_proposal() -> None:
-    """Operational metadata + premium are not PII."""
+    """Operational metadata + premium + holder_kind are not PII."""
     non_pii = non_pii_fields(CanonicalProposal)
     assert set(non_pii) == {
         "schema_version",
         "schema_effective_date",
         "erased",
+        "holder_kind",
         "premium",
     }
 
@@ -75,23 +76,31 @@ def test_partition_covers_all_fields() -> None:
 
 def test_is_pii_field_check() -> None:
     fields = CanonicalProposal.model_fields
-    assert is_pii(fields["holder"])
+    assert is_pii(fields["holder_name"])
     assert is_pii(fields["zip_code"])
+    assert not is_pii(fields["holder_kind"])
     assert not is_pii(fields["premium"])
     assert not is_pii(fields["schema_version"])
 
 
 def test_pii_annotation_does_not_break_validation() -> None:
     """A model with PII-annotated fields still validates as usual."""
-    p = CanonicalProposal(holder="Alice", premium=100.0, zip_code="10001", age=30)
-    assert p.holder == "Alice"
+    p = CanonicalProposal(
+        holder_kind="individual",
+        holder_name="Alice",
+        premium=100.0,
+        zip_code="10001",
+        age=30,
+    )
+    assert p.holder_name == "Alice"
     assert p.zip_code == "10001"
 
 
 def test_pii_annotation_does_not_break_dbt_drift() -> None:
     """The dbt drift check reads the underlying SQL types, not the marker."""
     cols = expected_columns(CanonicalProposal)
-    assert cols["holder"] == "VARCHAR"
+    assert cols["holder_name"] == "VARCHAR"
+    assert cols["holder_kind"] == "VARCHAR"
     assert cols["zip_code"] == "VARCHAR"
     assert cols["age"] == "INTEGER"
 

@@ -52,28 +52,32 @@ def test_pipeline_materialises_contracts_and_rejections() -> None:
         pd.DataFrame(
             [
                 {
-                    "holder": "Alice",
+                    "holder_kind": "individual",
+                    "holder_name": "Alice",
                     "premium": 100.0,
                     "zip_code": "10001",
                     "age": 30,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Bob",
+                    "holder_kind": "individual",
+                    "holder_name": "Bob",
                     "premium": -50.0,
                     "zip_code": "94102",
                     "age": 25,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Charlie",
+                    "holder_kind": "individual",
+                    "holder_name": "Charlie",
                     "premium": 250.0,
                     "zip_code": "94102",
                     "age": 20,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Dee",
+                    "holder_kind": "individual",
+                    "holder_name": "Dee",
                     "premium": 200.0,
                     "zip_code": "10001",
                     "age": 60,
@@ -104,10 +108,10 @@ def test_pipeline_materialises_contracts_and_rejections() -> None:
     assert counts == {"contracts": 2, "rejections": 2}
 
     contracts = session.read_table("contracts")
-    assert sorted(contracts["holder"].tolist()) == ["Alice", "Dee"]
+    assert sorted(contracts["holder_name"].tolist()) == ["Alice", "Dee"]
 
     rejections = session.read_table("rejections")
-    assert sorted(rejections["holder"].tolist()) == ["Bob", "Charlie"]
+    assert sorted(rejections["holder_name"].tolist()) == ["Bob", "Charlie"]
 
     summary = session.sql("SELECT rule_name, n FROM rejection_summary ORDER BY rule_name")
     assert summary["rule_name"].tolist() == ["premium"]
@@ -120,14 +124,16 @@ def test_pipeline_admits_all_clean_baseline() -> None:
         pd.DataFrame(
             [
                 {
-                    "holder": "Alice",
+                    "holder_kind": "individual",
+                    "holder_name": "Alice",
                     "premium": 100.0,
                     "zip_code": "10001",
                     "age": 30,
                     **_METADATA_DEFAULTS,
                 },
                 {
-                    "holder": "Dee",
+                    "holder_kind": "individual",
+                    "holder_name": "Dee",
                     "premium": 200.0,
                     "zip_code": "10001",
                     "age": 60,

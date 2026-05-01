@@ -10,9 +10,12 @@ sources:
       - name: proposals
         description: Raw proposal rows; one per submission.
         columns:
-          - name: holder
+          - name: holder_kind
             data_type: VARCHAR
-            description: Policy holder name.
+            description: ADR 006 §1 holder discriminator; "individual" or "entity".
+          - name: holder_name
+            data_type: VARCHAR
+            description: Policy holder's name (PII for individual holders; ADR 006 §1 over-protection caveat).
           - name: premium
             data_type: DOUBLE
             description: Proposed premium amount.

@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -265,11 +265,22 @@ Implementation in progress:
 * The `catins.privacy` package with the `PII` marker
   (`PII(category, regimes={...})`) and Pydantic introspection
   (`pii_fields`, `non_pii_fields`, `is_pii`).
-  `CanonicalProposal.holder` is annotated `PII("direct",
+  `CanonicalProposal.holder_name` is annotated `PII("direct",
   regimes={"GLBA"})`; `zip_code` and `age` are
   `PII("quasi", regimes={"GLBA"})`. The annotation is invisible to
   the dbt drift check (Pydantic exposes the underlying SQL-mapped
   type) and to Pydantic validation.
+* The holder discriminated union: `IndividualHolder | EntityHolder`
+  with a `kind` literal, per-branch PII annotations
+  (individual.name = direct PII; entity.name = not PII per ADR 006
+  §1), and a `CanonicalProposal.holder` property that reconstructs
+  the typed union from the flat `holder_kind` / `holder_name`
+  warehouse columns. `extraction_fields(...)` returns the required
+  domain fields Cortex should populate, excluding defaulted ones
+  like `holder_kind`. The flat-column over-protection caveat
+  (proposal-level `holder_name` is annotated PII unconditionally)
+  is documented; the typed-union view is the only place where the
+  conditional semantic is preserved.
 
 Production data flow is still gated on the rest of the revisit.
 
