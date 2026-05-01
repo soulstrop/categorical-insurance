@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -281,6 +281,17 @@ Implementation in progress:
   (proposal-level `holder_name` is annotated PII unconditionally)
   is documented; the typed-union view is the only place where the
   conditional semantic is preserved.
+* The `catins.schema_evolution` package: `SchemaVersion(version,
+  effective_date)` value object + `SchemaRegistry` mapping
+  integer version → `(SchemaVersion, model_cls)`, plus
+  `parse_proposal(row, registry)` that dispatches a flat row to
+  the registered model or returns a `QuarantineRow` (with
+  ``reason`` and ``schema_version_seen``) on missing version,
+  unknown version, or Pydantic validation failure. A populated
+  `DEFAULT_REGISTRY` (v1 = `CanonicalProposal`) is exported for
+  production callers; tests construct their own registry to
+  exercise multi-version dispatch in isolation. P2R.11 wires
+  `QuarantineRow` instances into the `raw_quarantine` table.
 
 Production data flow is still gated on the rest of the revisit.
 
