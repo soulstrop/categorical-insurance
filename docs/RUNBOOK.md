@@ -166,10 +166,17 @@ without an identified cause: data-platform lead.
 **Signal.** The asset's freshness state in the Dagster UI is WARN
 (materialisation older than 12 hours) or FAIL (older than 24 hours).
 Affects `validated_outcomes`, `contracts`, `rejections` per the
-`FreshnessPolicy.time_window` set in P3.3.
+`FreshnessPolicy.time_window` attached to those assets.
+
+**Schedule alignment.** `catins_daily_schedule` runs at `0 6 * * *`
+UTC. The 06:00-UTC start composed with the 12h-warn / 24h-fail
+windows gives 18h+ of headroom before WARN and 6h+ before FAIL,
+even after a generous overrun. A WARN that fires before 18:00 UTC
+on the same day usually means the schedule did not run at all, not
+that it ran slow.
 
 **What it means.** The asset has not been re-materialised within
-the SLA window. Either the daily schedule (P3.7) failed, the
+the SLA window. Either the daily schedule failed, the
 materialisation took longer than the window, or the schedule was
 disabled.
 
@@ -190,8 +197,7 @@ disabled.
 * **Failed run.** Triage per the failing asset: schema drift (§1),
   guardrail (§2), Cortex (§3), or another error.
 * **Disabled schedule.** Re-enable in the UI or via
-  `dagster schedule start catins_daily_schedule` once the
-  schedule lands (P3.7).
+  `dagster schedule start catins_daily_schedule`.
 * **Stale event log.** Restart the `dagster-daemon` process.
 
 **Escalate.** A 24-hour FAIL on `contracts` is a customer-facing

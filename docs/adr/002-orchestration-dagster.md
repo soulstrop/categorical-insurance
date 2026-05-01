@@ -1,8 +1,9 @@
 # ADR 002: Orchestration — Phased Adoption Toward Dagster
 
 ## Status
-Accepted (revised 2026-04-25; further revised 2026-04-30 to
-catalogue new asset types introduced by ADRs 006–008).
+Accepted (revised 2026-04-25; revised 2026-04-30 to catalogue new
+asset types introduced by ADRs 006–008 and to record entry into
+Phase B against the mock substrate via Phase 3 P3.1–P3.7).
 
 ## Context
 Our architecture coordinates multiple distinct execution
@@ -94,6 +95,24 @@ This migration is anticipated, not feared: the Phase A harness is a
 thin imperative wrapper over the same SQL/Snowpark calls Dagster
 would issue declaratively. Migration is an asset-graph rewrite, not
 a re-architecture.
+
+### Current state (2026-04-30)
+Phase B's *graph* has been realised; Phase B's *substrate* is still
+the mock stack. Phase 3 P3.1–P3.7 stood up the Dagster
+`Definitions` (assets, asset checks, `FreshnessPolicy`, daily
+`ScheduleDefinition`, `ConfigurableResource`-based seams) against
+the mock substrate introduced in Phase-2-revisit: DuckDB for the
+warehouse, `MockCortex` for the Cortex client, in-process
+Pydantic v2 models in lieu of Snowpark-side validators.
+
+The cutover from mocks to Snowpark / Cortex / Vault is not an
+asset-graph change — by design, the seam protocols
+(`WarehouseSession`, `CortexClient`) ensure that swap is a single
+resource binding in `Definitions`. The sandbox-time tickets
+P3.8–P3.11 (`quarantine_check`, `pii_access_anomaly_check`,
+`erasure_latency_check`, `view_filter_compliance_check`) remain
+gated on the Phase-2-revisit production swap landing the assets
+they read from.
 
 ## Asset types introduced by ADRs 006–008
 
