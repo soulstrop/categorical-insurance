@@ -14,3 +14,9 @@ models:
         data_type: VARCHAR
       - name: age
         data_type: INTEGER
+      - name: schema_version
+        data_type: INTEGER
+      - name: schema_effective_date
+        data_type: DATE
+      - name: erased
+        data_type: BOOLEAN

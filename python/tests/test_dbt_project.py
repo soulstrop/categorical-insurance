@@ -24,16 +24,36 @@ def _seed_raw_proposals(duckdb_path: Path) -> None:
             holder VARCHAR,
             premium DOUBLE,
             zip_code VARCHAR,
-            age INTEGER
+            age INTEGER,
+            schema_version INTEGER,
+            schema_effective_date DATE,
+            erased BOOLEAN
         )
         """
     )
+    schema_v1_date = pd.Timestamp("2026-04-30")
     con.register(
         "__seed_buf",
         pd.DataFrame(
             [
-                {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-                {"holder": "Bob", "premium": 250.0, "zip_code": "94102", "age": 45},
+                {
+                    "holder": "Alice",
+                    "premium": 100.0,
+                    "zip_code": "10001",
+                    "age": 30,
+                    "schema_version": 1,
+                    "schema_effective_date": schema_v1_date,
+                    "erased": False,
+                },
+                {
+                    "holder": "Bob",
+                    "premium": 250.0,
+                    "zip_code": "94102",
+                    "age": 45,
+                    "schema_version": 1,
+                    "schema_effective_date": schema_v1_date,
+                    "erased": False,
+                },
             ]
         ),
     )

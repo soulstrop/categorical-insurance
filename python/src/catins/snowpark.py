@@ -22,7 +22,7 @@ import pyarrow as pa
 from pydantic import TypeAdapter
 
 from catins.decision import DecisionSystem, evaluate
-from catins.models import Proposal
+from catins.models import Proposal, proposal_domain_fields
 from catins.monoid import ListMonoid, Monoid
 from catins.warehouse import WarehouseSession
 
@@ -66,7 +66,7 @@ def vectorize_validator[P: Proposal, M](
     def udf(*args: pd.Series) -> pd.Series:
         if not args:
             return pd.Series([])
-        fields = list(proposal_cls.model_fields.keys())
+        fields = proposal_domain_fields(proposal_cls)
         df = pd.DataFrame(dict(zip(fields, args, strict=True)))
         records = df.to_dict(orient="records")
         proposals = adapter.validate_python(records)
@@ -93,7 +93,7 @@ def _arrow_udf_factory[P: Proposal, M](
     proposal model's fields.
     """
     adapter = TypeAdapter(list[proposal_cls])  # type: ignore[valid-type]
-    fields = list(proposal_cls.model_fields.keys())
+    fields = proposal_domain_fields(proposal_cls)
 
     def _impl(*cols: pa.ChunkedArray) -> pa.Array:
         df = pd.DataFrame({fields[i]: cols[i].to_pandas() for i in range(len(cols))})
@@ -130,8 +130,9 @@ _DUCKDB_TYPE_MAPPING = {
 
 def _duckdb_param_types(proposal_cls: type[Proposal]) -> list[str]:
     out: list[str] = []
-    for field_name, field_info in proposal_cls.model_fields.items():
-        annotation = field_info.annotation
+    concrete = proposal_domain_fields(proposal_cls)
+    for field_name in concrete:
+        annotation = proposal_cls.model_fields[field_name].annotation
         sql_type = _DUCKDB_TYPE_MAPPING.get(annotation)  # type: ignore[arg-type]
         if sql_type is None:
             msg = f"unsupported field type for {field_name}: {annotation}"
@@ -168,9 +169,14 @@ def run_validation_pipeline(
 
     Returns row counts suitable for logging and asset-check metadata.
     """
-    fields = list(proposal_cls.model_fields.keys())
-    field_list = ", ".join(fields)
-    field_args = ", ".join(fields)
+    # All warehouse columns flow through unchanged; only the *concrete*
+    # domain fields are passed into the validator UDF (the inherited
+    # metadata fields are irrelevant to validation but still need to
+    # land in contracts/rejections).
+    all_fields = list(proposal_cls.model_fields.keys())
+    udf_fields = proposal_domain_fields(proposal_cls)
+    field_list = ", ".join(all_fields)
+    field_args = ", ".join(udf_fields)
 
     session.sql(
         f"""

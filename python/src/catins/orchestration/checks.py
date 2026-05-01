@@ -54,8 +54,21 @@ _PANDAS_DTYPE_TO_SQL = {
 
 
 def _df_to_sql_columns(df: pd.DataFrame) -> dict[str, str]:
-    """Project a DataFrame's column dtypes into the SQL-type vocabulary."""
-    return {col: _PANDAS_DTYPE_TO_SQL.get(str(df[col].dtype), "VARIANT") for col in df.columns}
+    """Project a DataFrame's column dtypes into the SQL-type vocabulary.
+
+    Pandas datetime resolutions (`datetime64[ns]`, `datetime64[us]`,
+    etc. — pandas 2.x defaults to `[us]`) all map to SQL ``DATE`` since
+    the warehouse has no native sub-day time on the columns we use this
+    check for. Other dtypes go through the dict lookup.
+    """
+    result: dict[str, str] = {}
+    for col in df.columns:
+        dtype_str = str(df[col].dtype)
+        if dtype_str.startswith("datetime64"):
+            result[col] = "DATE"
+        else:
+            result[col] = _PANDAS_DTYPE_TO_SQL.get(dtype_str, "VARIANT")
+    return result
 
 
 def _evaluate_schema_drift(df: pd.DataFrame) -> AssetCheckResult:

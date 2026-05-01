@@ -22,3 +22,12 @@ sources:
           - name: age
             data_type: INTEGER
             description: Holder age in years.
+          - name: schema_version
+            data_type: INTEGER
+            description: ADR 008 schema version. Defaults to 1.
+          - name: schema_effective_date
+            data_type: DATE
+            description: Date on which this row's schema version became effective.
+          - name: erased
+            data_type: BOOLEAN
+            description: ADR 007 tombstone marker; rows where erased=true are filtered out of consumer-facing views.

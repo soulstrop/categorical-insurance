@@ -53,6 +53,9 @@ def test_drift_detects_type_mismatch() -> None:
 def test_expected_columns_for_canonical() -> None:
     cols = expected_columns(CanonicalProposal)
     assert cols == {
+        "schema_version": "INTEGER",
+        "schema_effective_date": "DATE",
+        "erased": "BOOLEAN",
         "holder": "VARCHAR",
         "premium": "DOUBLE",
         "zip_code": "VARCHAR",

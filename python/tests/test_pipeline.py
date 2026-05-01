@@ -7,10 +7,16 @@ from pathlib import Path
 import pandas as pd
 
 from catins.cortex import BudgetedCortex, MockCortex
-from catins.models import CanonicalProposal, Violation
+from catins.models import SCHEMA_V1_EFFECTIVE_DATE, CanonicalProposal, Violation
 from catins.monoid import ListMonoid, RiskScoreMonoid, product_monoid
 from catins.pipeline import run_pipeline
 from catins.warehouse import DuckDBSession
+
+_METADATA_DEFAULTS = {
+    "schema_version": 1,
+    "schema_effective_date": pd.Timestamp(SCHEMA_V1_EFFECTIVE_DATE),
+    "erased": False,
+}
 
 JointMonoid = product_monoid(ListMonoid, RiskScoreMonoid)
 RISK_CAP = 1.0
@@ -43,8 +49,20 @@ def test_pipeline_with_seeded_staging_table() -> None:
     seed_session.write_table(
         pd.DataFrame(
             [
-                {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-                {"holder": "Bob", "premium": -50.0, "zip_code": "94102", "age": 25},
+                {
+                    "holder": "Alice",
+                    "premium": 100.0,
+                    "zip_code": "10001",
+                    "age": 30,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Bob",
+                    "premium": -50.0,
+                    "zip_code": "94102",
+                    "age": 25,
+                    **_METADATA_DEFAULTS,
+                },
             ]
         ),
         "stg_proposals",
@@ -95,8 +113,20 @@ def _seed_raw_proposals_file(duckdb_path: Path) -> None:
     session.write_table(
         pd.DataFrame(
             [
-                {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-                {"holder": "Bob", "premium": 250.0, "zip_code": "10001", "age": 45},
+                {
+                    "holder": "Alice",
+                    "premium": 100.0,
+                    "zip_code": "10001",
+                    "age": 30,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Bob",
+                    "premium": 250.0,
+                    "zip_code": "10001",
+                    "age": 45,
+                    **_METADATA_DEFAULTS,
+                },
             ]
         ),
         "raw.proposals",

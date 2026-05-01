@@ -8,6 +8,7 @@ committed file for drift.
 """
 
 import sys
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ TYPE_MAPPING = {
     "float": "DOUBLE",
     "int": "INTEGER",
     "bool": "BOOLEAN",
+    "date": "DATE",
 }
 
 
@@ -35,6 +37,8 @@ def _columns_for(model_cls: type[BaseModel]) -> list[dict[str, Any]]:
             type_str = "int"
         elif annotation is bool:
             type_str = "bool"
+        elif annotation is date:
+            type_str = "date"
         else:
             type_str = getattr(annotation, "__name__", str(annotation))
 

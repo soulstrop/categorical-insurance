@@ -7,10 +7,16 @@ DuckDB session, and asserts that the resulting ``contracts``,
 
 import pandas as pd
 
-from catins.models import CanonicalProposal, Violation
+from catins.models import SCHEMA_V1_EFFECTIVE_DATE, CanonicalProposal, Violation
 from catins.monoid import ListMonoid, RiskScoreMonoid, product_monoid
 from catins.snowpark import register_validator, run_validation_pipeline
 from catins.warehouse import DuckDBSession
+
+_METADATA_DEFAULTS = {
+    "schema_version": 1,
+    "schema_effective_date": pd.Timestamp(SCHEMA_V1_EFFECTIVE_DATE),
+    "erased": False,
+}
 
 JointMonoid = product_monoid(ListMonoid, RiskScoreMonoid)
 RISK_CAP = 1.0
@@ -45,10 +51,34 @@ def test_pipeline_materialises_contracts_and_rejections() -> None:
     session.write_table(
         pd.DataFrame(
             [
-                {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-                {"holder": "Bob", "premium": -50.0, "zip_code": "94102", "age": 25},
-                {"holder": "Charlie", "premium": 250.0, "zip_code": "94102", "age": 20},
-                {"holder": "Dee", "premium": 200.0, "zip_code": "10001", "age": 60},
+                {
+                    "holder": "Alice",
+                    "premium": 100.0,
+                    "zip_code": "10001",
+                    "age": 30,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Bob",
+                    "premium": -50.0,
+                    "zip_code": "94102",
+                    "age": 25,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Charlie",
+                    "premium": 250.0,
+                    "zip_code": "94102",
+                    "age": 20,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Dee",
+                    "premium": 200.0,
+                    "zip_code": "10001",
+                    "age": 60,
+                    **_METADATA_DEFAULTS,
+                },
             ]
         ),
         "stg_proposals",
@@ -89,8 +119,20 @@ def test_pipeline_admits_all_clean_baseline() -> None:
     session.write_table(
         pd.DataFrame(
             [
-                {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-                {"holder": "Dee", "premium": 200.0, "zip_code": "10001", "age": 60},
+                {
+                    "holder": "Alice",
+                    "premium": 100.0,
+                    "zip_code": "10001",
+                    "age": 30,
+                    **_METADATA_DEFAULTS,
+                },
+                {
+                    "holder": "Dee",
+                    "premium": 200.0,
+                    "zip_code": "10001",
+                    "age": 60,
+                    **_METADATA_DEFAULTS,
+                },
             ]
         ),
         "stg_proposals",

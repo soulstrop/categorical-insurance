@@ -74,11 +74,36 @@ joint_udf = vectorize_validator(
 @asset
 def raw_proposals() -> pd.DataFrame:
     """Mock ingest of unstructured data extracted via Cortex."""
+    schema_v1_date = pd.Timestamp("2026-04-30")
     return pd.DataFrame(
         [
-            {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-            {"holder": "Bob", "premium": -50.0, "zip_code": "90210", "age": 25},
-            {"holder": "Charlie", "premium": 250.0, "zip_code": "94102", "age": 20},
+            {
+                "holder": "Alice",
+                "premium": 100.0,
+                "zip_code": "10001",
+                "age": 30,
+                "schema_version": 1,
+                "schema_effective_date": schema_v1_date,
+                "erased": False,
+            },
+            {
+                "holder": "Bob",
+                "premium": -50.0,
+                "zip_code": "90210",
+                "age": 25,
+                "schema_version": 1,
+                "schema_effective_date": schema_v1_date,
+                "erased": False,
+            },
+            {
+                "holder": "Charlie",
+                "premium": 250.0,
+                "zip_code": "94102",
+                "age": 20,
+                "schema_version": 1,
+                "schema_effective_date": schema_v1_date,
+                "erased": False,
+            },
         ]
     )
 

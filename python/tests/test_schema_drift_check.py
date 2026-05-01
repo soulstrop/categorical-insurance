@@ -17,10 +17,27 @@ from catins.orchestration.checks import _evaluate_schema_drift
 
 
 def _canonical_df() -> pd.DataFrame:
+    schema_v1_date = pd.Timestamp("2026-04-30")
     return pd.DataFrame(
         [
-            {"holder": "Alice", "premium": 100.0, "zip_code": "10001", "age": 30},
-            {"holder": "Bob", "premium": 250.0, "zip_code": "94102", "age": 45},
+            {
+                "holder": "Alice",
+                "premium": 100.0,
+                "zip_code": "10001",
+                "age": 30,
+                "schema_version": 1,
+                "schema_effective_date": schema_v1_date,
+                "erased": False,
+            },
+            {
+                "holder": "Bob",
+                "premium": 250.0,
+                "zip_code": "94102",
+                "age": 45,
+                "schema_version": 1,
+                "schema_effective_date": schema_v1_date,
+                "erased": False,
+            },
         ]
     )
 

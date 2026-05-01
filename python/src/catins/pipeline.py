@@ -27,7 +27,7 @@ import pandas as pd
 
 from catins.cortex import BudgetedCortex
 from catins.decision import DecisionSystem
-from catins.models import CanonicalProposal, Proposal
+from catins.models import CanonicalProposal, Proposal, proposal_domain_fields
 from catins.monoid import ListMonoid, Monoid
 from catins.snowpark import register_validator, run_validation_pipeline
 from catins.warehouse import WarehouseSession
@@ -121,12 +121,15 @@ def run_pipeline[P: Proposal, M](
 
     extracted_count = 0
     if raw_texts is not None:
-        records = extract_proposals(
-            cortex, raw_texts, fields=list(proposal_cls.model_fields.keys())
-        )
+        records = extract_proposals(cortex, raw_texts, fields=proposal_domain_fields(proposal_cls))
         extracted_count = len(records)
         if records:
-            session.write_table(pd.DataFrame(records), source_table)
+            # Cortex extracts only domain fields; validate through Pydantic
+            # so the metadata fields (schema_version, schema_effective_date,
+            # erased) get their defaults before the row lands in the
+            # warehouse with the canonical column set.
+            full_records = [proposal_cls(**r).model_dump() for r in records]
+            session.write_table(pd.DataFrame(full_records), source_table)
 
     register_validator(
         session,
