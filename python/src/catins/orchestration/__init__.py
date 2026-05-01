@@ -10,6 +10,7 @@ from catins.orchestration.checks import (
     check_cortex_budget,
     check_guardrail_stability,
     check_schema_drift,
+    check_view_filter_compliance,
 )
 from catins.orchestration.definitions import (
     CATINS_DAILY_CRON,
@@ -32,6 +33,7 @@ __all__ = [
     "check_cortex_budget",
     "check_guardrail_stability",
     "check_schema_drift",
+    "check_view_filter_compliance",
     "defs",
     "partitioned_outcomes",
     "raw_proposals",

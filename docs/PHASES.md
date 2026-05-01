@@ -20,7 +20,7 @@ more verification) is fixed.
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
 | 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | decided, implementation pending |
-| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7 done; P3.8–P3.11 pending Phase-2-revisit) |
+| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
 
@@ -347,11 +347,13 @@ token-spend check (`291136b`), FreshnessPolicy on terminal
 assets (`719bdc8`), canonical-generator schema-drift check
 (`6b3407f`), planted-regression test for guardrail-stability
 (`4ed800b`), on-call runbook (`ddb532b`), daily
-ScheduleDefinition (this commit). Phase-2-revisit follow-up
-checks (P3.8–P3.11: quarantine, PII access anomaly, erasure
-latency, view-filter compliance) are catalogued below and
-pending — they need the Phase-2-revisit implementation to land
-first.
+ScheduleDefinition (`632e33e`). P3.11 view-filter compliance
+landed mock-first against today's manifest (passes vacuously; will
+fire when Phase-2-revisit adds `models/marts/` views without the
+filter). P3.8–P3.10 (quarantine, PII access anomaly, erasure
+latency) are catalogued below and pending — they need
+Phase-2-revisit-side assets (`raw_quarantine`, `_audit_erasures`,
+`ACCESS_HISTORY` integration) to read from.
 
 **Frame.** The pipeline graph that already exists implicitly in
 Phase 2 becomes a first-class object via Dagster Software-Defined
@@ -405,7 +407,8 @@ are pending tickets.
   P3.3 24-hour freshness window with 18+ hours of overnight
   headroom before the 12-hour warn threshold trips.
 * (Phase-2-revisit follow-ups, per ADR 002's 2026-04-30
-  revision and ADRs 006/007/008. **All pending; numbered P3.8–P3.11.**)
+  revision and ADRs 006/007/008. **P3.11 landed mock-first;
+  P3.8–P3.10 still pending Phase-2-revisit.**)
   Additional asset checks and scheduled jobs:
   * **[pending P3.8]** `quarantine_check` (ADR 008): fails when
     `raw_quarantine` is non-empty for the latest partition.
@@ -416,9 +419,11 @@ are pending tickets.
     time from erasure-request to tombstone (tracked against
     CCPA's 45-day window even though the system's GLBA-only
     scope means the SLA is operational, not legal).
-  * **[pending P3.11]** `view_filter_compliance_check` (ADR 007):
-    static check over the dbt manifest asserting every consumer-
-    facing view filters `erased = false`.
+  * **[done P3.11]** `view_filter_compliance_check`
+    (ADR 007): static check over the dbt manifest asserting every
+    consumer-facing view filters `erased = false`. Currently passes
+    vacuously (no `models/marts/` views exist yet); becomes
+    load-bearing the moment Phase-2-revisit adds them.
   * **[pending Phase-2-revisit]** `schema_compat_check` (ADR 008):
     fails on candidate breaking schema change without
     `# evolution: breaking` annotation. (Listed here since the

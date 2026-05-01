@@ -1,5 +1,8 @@
 """Dagster Asset Checks for the insurance pipeline."""
 
+import json
+import re
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -10,6 +13,15 @@ from catins.models import CanonicalProposal
 from catins.orchestration.resources import CortexResource
 
 MAX_PORTFOLIO_RISK_SCORE = 0.6
+
+# `python/src/catins/orchestration/checks.py` → parents[3] = `python/`.
+DBT_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "dbt" / "target" / "manifest.json"
+
+# ADR 007 §2 prescribes the literal predicate ``erased = false`` (case-
+# insensitive, whitespace-flexible). Equivalents like ``NOT erased``
+# are intentionally rejected: a single canonical form keeps grep,
+# review, and this check aligned.
+_ERASURE_FILTER_PATTERN = re.compile(r"\berased\s*=\s*false\b", re.IGNORECASE)
 
 # Pandas dtype string -> SQL type used by ``catins.dbt.TYPE_MAPPING``.
 # The mapping intentionally collapses 32 / 64-bit width (DuckDB's
@@ -131,6 +143,91 @@ def _evaluate_guardrail_stability(df: pd.DataFrame) -> AssetCheckResult:
 def check_guardrail_stability(validated_outcomes: pd.DataFrame) -> AssetCheckResult:
     """Ensure the mean risk score is within a learned boundary."""
     return _evaluate_guardrail_stability(validated_outcomes)
+
+
+def _consumer_views(manifest: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return ``[(model_id, compiled_code), …]`` for consumer-facing views.
+
+    Heuristic per ADR 007 line 280: consumer-facing views live under
+    ``models/marts/`` and are materialised as views (tables and
+    incrementals are managed by the cleaning sweep, not by the
+    view-filter discipline). Anything outside ``models/marts/`` is
+    treated as intermediate and exempt from the filter rule.
+    """
+    out: list[tuple[str, str]] = []
+    for node_id, node in manifest.get("nodes", {}).items():
+        if node.get("resource_type") != "model":
+            continue
+        if node.get("config", {}).get("materialized") != "view":
+            continue
+        path = node.get("original_file_path") or ""
+        if "models/marts/" not in path.replace("\\", "/"):
+            continue
+        out.append((node_id, node.get("compiled_code") or ""))
+    return out
+
+
+def _has_erasure_filter(sql: str) -> bool:
+    """Whether ``sql`` contains the canonical ``erased = false`` predicate."""
+    return bool(_ERASURE_FILTER_PATTERN.search(sql))
+
+
+def _evaluate_view_filter_compliance(manifest: dict[str, Any]) -> AssetCheckResult:
+    """Static check: every consumer-facing view filters ``erased = false``.
+
+    Implements ADR 007 §2 at the Dagster layer (complementary to the
+    dbt generic test of the same purpose). A vacuous pass — no
+    consumer views found — is the expected state until Phase-2-revisit
+    introduces ``models/marts/``; the check exists now so that the
+    moment a view lands without the filter, ops sees red.
+    """
+    views = _consumer_views(manifest)
+    convention = "WHERE erased = false"
+    if not views:
+        return AssetCheckResult(
+            passed=True,
+            description="No consumer-facing views found under models/marts/.",
+            metadata={"n_views": 0, "n_violations": 0, "convention": convention},
+        )
+    violations = sorted(vid for vid, sql in views if not _has_erasure_filter(sql))
+    passed = not violations
+    if passed:
+        description = f"All {len(views)} consumer-facing views filter `{convention}`."
+    else:
+        description = (
+            f"{len(violations)}/{len(views)} consumer-facing views are missing "
+            f"`{convention}`: {violations}"
+        )
+    return AssetCheckResult(
+        passed=passed,
+        description=description,
+        metadata={
+            "n_views": len(views),
+            "n_violations": len(violations),
+            "violations": violations,
+            "convention": convention,
+        },
+    )
+
+
+@asset_check(asset="raw_proposals")
+def check_view_filter_compliance() -> AssetCheckResult:
+    """Static check over the dbt manifest for ADR 007 view-filter discipline.
+
+    Bound to ``raw_proposals`` because every current view ultimately
+    reads from the raw source; the check itself is a property of the
+    dbt project, not of the asset's data, so it takes no inputs.
+    """
+    if not DBT_MANIFEST_PATH.exists():
+        return AssetCheckResult(
+            passed=False,
+            description=(
+                f"dbt manifest not found at {DBT_MANIFEST_PATH}. Run `dbt parse` from python/dbt/."
+            ),
+            metadata={"manifest_path": str(DBT_MANIFEST_PATH)},
+        )
+    manifest = json.loads(DBT_MANIFEST_PATH.read_text())
+    return _evaluate_view_filter_compliance(manifest)
 
 
 @asset_check(asset="rejection_letters")

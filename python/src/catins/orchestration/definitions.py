@@ -21,6 +21,7 @@ from catins.orchestration.checks import (
     check_cortex_budget,
     check_guardrail_stability,
     check_schema_drift,
+    check_view_filter_compliance,
 )
 from catins.orchestration.resources import CortexResource, WarehouseResource
 
@@ -51,7 +52,12 @@ defs = Definitions(
         partitioned_outcomes,
         rejection_letters,
     ],
-    asset_checks=[check_schema_drift, check_guardrail_stability, check_cortex_budget],
+    asset_checks=[
+        check_schema_drift,
+        check_guardrail_stability,
+        check_cortex_budget,
+        check_view_filter_compliance,
+    ],
     jobs=[catins_job],
     schedules=[catins_daily_schedule],
     resources={

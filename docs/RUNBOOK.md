@@ -22,9 +22,10 @@ themselves are still open (see *Out of scope* at the bottom and
 | Red asset check on `validated_outcomes` | `check_guardrail_stability` | [Guardrail drift](#guardrail-distribution-drift) | §2 |
 | Red asset check on `rejection_letters` | `check_cortex_budget` | [Cortex budget](#cortex-token-budget-warning) | §3 |
 | Asset freshness state = WARN or FAIL | (auto, per asset) | [Stale asset](#asset-freshness-warning-or-failure) | §4 |
-| Non-empty `raw_quarantine` partition | `quarantine_check` (Phase-2-revisit) | [Quarantine](#quarantine-investigation) | §6 |
-| `pii_access_anomaly_check` red | (Phase-2-revisit) | [PII access](#pii-access-anomaly-investigation) | §5 |
-| `erasure_latency_check` red | (Phase-2-revisit) | [Erasure latency](#erasure-latency-breach) | §5 |
+| Red asset check on `raw_proposals` (static dbt) | `check_view_filter_compliance` | [View-filter compliance](#view-filter-compliance) | §5 |
+| Non-empty `raw_quarantine` partition | `quarantine_check` (Phase-2-revisit) | [Quarantine](#quarantine-investigation) | §7 |
+| `pii_access_anomaly_check` red | (Phase-2-revisit) | [PII access](#pii-access-anomaly-investigation) | §6 |
+| `erasure_latency_check` red | (Phase-2-revisit) | [Erasure latency](#erasure-latency-breach) | §6 |
 
 ---
 
@@ -205,7 +206,59 @@ incident — page on-call + comms.
 
 ---
 
-## §5. Privacy-officer procedures (ADRs 006/007)
+## §5. View-filter compliance
+
+**Signal.** `check_view_filter_compliance` is red. The asset-check
+description names the offending model(s) and reports
+`N/M consumer-facing views are missing WHERE erased = false`.
+
+**What it means.** A consumer-facing view (under `models/marts/`,
+materialised as a view) does not contain the literal predicate
+prescribed by ADR 007 §2. The check is a *static* read of the dbt
+manifest, not of runtime data — failure means the SQL is wrong, not
+that any specific row leaked. But: the SQL is wrong, so on the next
+materialisation this view *will* return erased rows to consumers.
+
+**Two failure modes.**
+
+* **Model authored without the filter.** Most common. The model
+  author either forgot the convention or wrote `NOT erased` /
+  `erased IS FALSE` (rejected — see ADR 007 §2 and the check's
+  regex; the canonical form is the only accepted form).
+* **dbt manifest stale.** If the manifest hasn't been regenerated
+  since the model was added, the check sees an old graph. Less
+  common but worth ruling out.
+
+**Diagnose.**
+
+1. Read the asset-check description; it lists each offending
+   `model.<package>.<name>` id.
+2. For each, open the file at `python/dbt/models/marts/<name>.sql`.
+3. Confirm the SQL is missing the literal `WHERE erased = false`
+   (or contains a non-canonical form like `NOT erased`).
+4. If the SQL *does* contain the canonical form, regenerate the
+   manifest: `cd python/dbt && dbt parse`.
+
+**Resolve.**
+
+* **Add the filter.** Append `WHERE erased = false` to the offending
+  view (or `AND erased = false` if a `WHERE` already exists).
+* **Rewrite a non-canonical form.** Replace `NOT erased`,
+  `erased IS FALSE`, etc. with `erased = false`. The convention
+  is intentional — it makes the check, dbt generic test, and
+  reviewer grep all line up on one form.
+* **Regenerate manifest.** If the model is correct, run
+  `dbt parse` from `python/dbt/`.
+
+**Escalate.** A red view-filter check that has been red for >1
+business day implies a consumer view is currently leaking erased
+PII into downstream queries. Page the privacy officer; they may
+decide to disable the offending view (`dbt run --exclude <model>`)
+until the filter is added.
+
+---
+
+## §6. Privacy-officer procedures (ADRs 006/007)
 
 These procedures are gated on the Phase-2-revisit implementation
 landing. They are documented now so the runbook is complete from
@@ -282,7 +335,7 @@ learned envelope.
 
 ---
 
-## §6. Schema-evolution procedures (ADR 008)
+## §7. Schema-evolution procedures (ADR 008)
 
 ### Adding a field (additive change)
 
