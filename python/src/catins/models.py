@@ -5,9 +5,11 @@ Violations, enforcing the categorical abstraction barriers.
 """
 
 from datetime import date
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict
+
+from catins.privacy import PII
 
 # v1 schema adoption date: the date ADRs 006/007/008 landed and the
 # evolution-tracking machinery began. Default for ``schema_effective_date``
@@ -55,10 +57,10 @@ class CanonicalProposal(Proposal):
     ``catins.dbt.check_dbt_source_drift``).
     """
 
-    holder: str
+    holder: Annotated[str, PII("direct", regimes={"GLBA"})]
     premium: float
-    zip_code: str
-    age: int
+    zip_code: Annotated[str, PII("quasi", regimes={"GLBA"})]
+    age: Annotated[int, PII("quasi", regimes={"GLBA"})]
 
 
 def proposal_domain_fields(proposal_cls: type["Proposal"]) -> list[str]:

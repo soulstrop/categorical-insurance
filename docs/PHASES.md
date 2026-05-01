@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema_version + erased fields landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -254,13 +254,23 @@ from history rather than mutable.
 **Status: implementation in progress.** ADRs 006/007/008 land the
 design in commit `868de27`; ADR 005 categorical lift in `8f67112`;
 cross-doc consistency sweep in commits `78979e3` through `dab3dc8`.
-First implementation slice (this commit): the three metadata fields
-on `Proposal` (`schema_version: int = 1`,
-`schema_effective_date: date = SCHEMA_V1_EFFECTIVE_DATE`,
-`erased: bool = False`). Validator UDF and Cortex extraction now
-operate on a `proposal_domain_fields(...)` projection rather than
-all model fields, so the metadata flows through warehouse storage
-without being passed through validators that don't care about it.
+Implementation in progress:
+* The three metadata fields on `Proposal`
+  (`schema_version: int = 1`,
+  `schema_effective_date: date = SCHEMA_V1_EFFECTIVE_DATE`,
+  `erased: bool = False`) and the
+  `proposal_domain_fields(...)` projection that keeps validators
+  and Cortex extraction operating on the concrete-subclass fields
+  while warehouse storage flows the full column set through.
+* The `catins.privacy` package with the `PII` marker
+  (`PII(category, regimes={...})`) and Pydantic introspection
+  (`pii_fields`, `non_pii_fields`, `is_pii`).
+  `CanonicalProposal.holder` is annotated `PII("direct",
+  regimes={"GLBA"})`; `zip_code` and `age` are
+  `PII("quasi", regimes={"GLBA"})`. The annotation is invisible to
+  the dbt drift check (Pydantic exposes the underlying SQL-mapped
+  type) and to Pydantic validation.
+
 Production data flow is still gated on the rest of the revisit.
 
 **Frame.** ADRs 006, 007, and 008 (2026-04-30) introduce
