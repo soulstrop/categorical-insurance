@@ -20,7 +20,7 @@ more verification) is fixed.
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
 | 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | decided, implementation pending |
-| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.3 done; P3.4–P3.7 pending) |
+| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.6 done; P3.7 + P3.8–P3.11 pending) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
 
@@ -343,12 +343,13 @@ today.
 
 **Status: in progress.** P3.1 (Definitions + Resources, commit
 `a4cedec`), P3.2 (Cortex token-spend asset check, commit
-`291136b`), and P3.3 (FreshnessPolicy on terminal assets, commit
-`719bdc8`) shipped. P3.4 (schema-drift check via the canonical
-generator), P3.5 (planted-regression test for guardrail-stability),
-P3.6 (on-call runbook), P3.7 (daily ScheduleDefinition) pending.
-Phase-2-revisit follow-up checks (quarantine, classification
-sweep, etc.) are catalogued below as P3.8–P3.11 and pending.
+`291136b`), P3.3 (FreshnessPolicy on terminal assets, commit
+`719bdc8`), P3.4 (schema-drift check via the canonical generator,
+commit `6b3407f`), P3.5 (planted-regression test for guardrail-
+stability, commit `4ed800b`), and P3.6 (on-call runbook) shipped.
+P3.7 (daily ScheduleDefinition) pending. Phase-2-revisit follow-up
+checks (quarantine, classification sweep, etc.) are catalogued
+below as P3.8–P3.11 and pending.
 
 **Frame.** The pipeline graph that already exists implicitly in
 Phase 2 becomes a first-class object via Dagster Software-Defined
@@ -392,8 +393,11 @@ are pending tickets.
   draft human-readable letter from a `Violation` list and the
   guardrail payload (implemented via the `MockCortex` stub
   established in Phase 2; resource-injected per P3.1).
-* **[pending P3.6]** On-call runbook: top three failure modes and
-  first-step responses.
+* **[done P3.6]** On-call runbook: top three failure modes and
+  first-step responses (`docs/RUNBOOK.md`, commit landing with
+  this ticket; covers schema drift, guardrail drift, Cortex
+  budget, freshness, plus the privacy-officer / Vault / schema-
+  evolution procedures from ADRs 006/007/008).
 * **[pending P3.7]** Daily `ScheduleDefinition` for the
   `catins_validation_job`.
 * (Phase-2-revisit follow-ups, per ADR 002's 2026-04-30

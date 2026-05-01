@@ -246,6 +246,7 @@ product monoid `M = ([Violation], RiskScore)` — making math.tex §VI's
 | [`docs/adr/008-schema-and-contract-evolution.md`](docs/adr/008-schema-and-contract-evolution.md) | Schema and contract evolution: integer + date versioning, multi-version coexistence across majors, ingest quarantine, tiered governance |
 | [`docs/PHASES.md`](docs/PHASES.md) | Phased rollout plan (laptop MVP → multi-jurisdiction with replay → audit-aware research extensions) |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Production system architecture on Snowflake |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | On-call runbook: failure modes, diagnosis, resolution; privacy / schema-evolution procedures |
 | [`docs/REFERENCES.md`](docs/REFERENCES.md) | Bibliography of underlying papers |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, mise tasks, per-language conventions, ADR authoring guidance |
 
