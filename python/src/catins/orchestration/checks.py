@@ -1,37 +1,98 @@
 """Dagster Asset Checks for the insurance pipeline."""
 
+from typing import Any
+
 import pandas as pd
 from dagster import AssetCheckResult, asset_check
 
-from catins.orchestration.assets import JointProposal
+from catins.dbt import expected_columns
+from catins.models import CanonicalProposal
 from catins.orchestration.resources import CortexResource
 
 MAX_PORTFOLIO_RISK_SCORE = 0.6
 
+# Pandas dtype string -> SQL type used by ``catins.dbt.TYPE_MAPPING``.
+# The mapping intentionally collapses 32 / 64-bit width (DuckDB's
+# INTEGER vs BIGINT, etc.) onto a single SQL family — the drift check
+# is a *shape* check, not a precision check; size mismatches are
+# caught by the Pydantic boundary at ingest.
+_PANDAS_DTYPE_TO_SQL = {
+    "int8": "INTEGER",
+    "int16": "INTEGER",
+    "int32": "INTEGER",
+    "int64": "INTEGER",
+    "Int8": "INTEGER",
+    "Int16": "INTEGER",
+    "Int32": "INTEGER",
+    "Int64": "INTEGER",
+    "uint8": "INTEGER",
+    "uint16": "INTEGER",
+    "uint32": "INTEGER",
+    "uint64": "INTEGER",
+    "float32": "DOUBLE",
+    "float64": "DOUBLE",
+    "Float32": "DOUBLE",
+    "Float64": "DOUBLE",
+    "object": "VARCHAR",
+    "string": "VARCHAR",
+    "str": "VARCHAR",
+    "bool": "BOOLEAN",
+    "boolean": "BOOLEAN",
+}
 
-@asset_check(asset="raw_proposals")
-def check_schema_drift(raw_proposals: pd.DataFrame) -> AssetCheckResult:
-    """Ensure the DataFrame columns match the Pydantic Proposal fields."""
-    expected_fields = set(JointProposal.model_fields.keys())
-    actual_columns = set(raw_proposals.columns)
 
-    missing = expected_fields - actual_columns
-    extra = actual_columns - expected_fields
+def _df_to_sql_columns(df: pd.DataFrame) -> dict[str, str]:
+    """Project a DataFrame's column dtypes into the SQL-type vocabulary."""
+    return {col: _PANDAS_DTYPE_TO_SQL.get(str(df[col].dtype), "VARIANT") for col in df.columns}
 
-    passed = len(missing) == 0
-    description = "Schema matches Pydantic Proposal."
 
-    if not passed:
-        description = f"Schema drift detected. Missing: {missing}, Extra: {extra}"
+def _evaluate_schema_drift(df: pd.DataFrame) -> AssetCheckResult:
+    """Compare a DataFrame's columns against ``CanonicalProposal``.
+
+    Reuses ``catins.dbt.expected_columns`` — the same function the CI
+    ``//python:dbt:check-drift`` task uses against the dbt YAML — so a
+    single source of truth (the Pydantic ``CanonicalProposal``) drives
+    both the warehouse-side contract and the runtime asset check.
+    """
+    expected = expected_columns(CanonicalProposal)
+    actual = _df_to_sql_columns(df)
+
+    missing = sorted(set(expected) - set(actual))
+    extra = sorted(set(actual) - set(expected))
+    type_mismatches: dict[str, Any] = {
+        name: {"expected": expected[name], "actual": actual[name]}
+        for name in sorted(set(expected) & set(actual))
+        if expected[name] != actual[name]
+    }
+
+    passed = not missing and not extra and not type_mismatches
+    if passed:
+        description = "Schema matches CanonicalProposal."
+    else:
+        parts: list[str] = []
+        if missing:
+            parts.append(f"missing: {missing}")
+        if extra:
+            parts.append(f"extra: {extra}")
+        if type_mismatches:
+            parts.append(f"type mismatches: {type_mismatches}")
+        description = "Schema drift: " + "; ".join(parts)
 
     return AssetCheckResult(
         passed=passed,
         description=description,
         metadata={
-            "missing_columns": list(missing),
-            "extra_columns": list(extra),
+            "missing_columns": missing,
+            "extra_columns": extra,
+            "type_mismatches": str(type_mismatches),
         },
     )
+
+
+@asset_check(asset="raw_proposals")
+def check_schema_drift(raw_proposals: pd.DataFrame) -> AssetCheckResult:
+    """Ensure raw_proposals' columns and dtypes match CanonicalProposal."""
+    return _evaluate_schema_drift(raw_proposals)
 
 
 @asset_check(asset="validated_outcomes")
