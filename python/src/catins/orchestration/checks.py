@@ -95,24 +95,42 @@ def check_schema_drift(raw_proposals: pd.DataFrame) -> AssetCheckResult:
     return _evaluate_schema_drift(raw_proposals)
 
 
+def _evaluate_guardrail_stability(df: pd.DataFrame) -> AssetCheckResult:
+    """Mean risk score below ``MAX_PORTFOLIO_RISK_SCORE`` ⇒ passed.
+
+    The check defends against silent drift in the guardrail's `m`
+    payload distribution — the kind of regression that would not
+    register as a governance failure (no rule fires) but indicates the
+    portfolio is shifting toward higher aggregate risk than the
+    underwriting model expects.
+    """
+    scores = [payload[1] for payload in df["payload"]]
+    if not scores:
+        return AssetCheckResult(
+            passed=True,
+            description="No scores to evaluate.",
+            metadata={"mean_score": 0.0, "n_rows": 0},
+        )
+    mean_score = sum(scores) / len(scores)
+    passed = mean_score < MAX_PORTFOLIO_RISK_SCORE
+    return AssetCheckResult(
+        passed=passed,
+        description=(
+            f"Mean risk score {mean_score:.3f} "
+            f"({'<' if passed else '>='} cap {MAX_PORTFOLIO_RISK_SCORE})"
+        ),
+        metadata={
+            "mean_score": mean_score,
+            "n_rows": len(scores),
+            "cap": MAX_PORTFOLIO_RISK_SCORE,
+        },
+    )
+
+
 @asset_check(asset="validated_outcomes")
 def check_guardrail_stability(validated_outcomes: pd.DataFrame) -> AssetCheckResult:
     """Ensure the mean risk score is within a learned boundary."""
-    # Payload is (violations, risk_score)
-    scores = [payload[1] for payload in validated_outcomes["payload"]]
-
-    if not scores:
-        return AssetCheckResult(passed=True, description="No scores to evaluate.")
-
-    mean_score = sum(scores) / len(scores)
-
-    passed = mean_score < MAX_PORTFOLIO_RISK_SCORE
-
-    return AssetCheckResult(
-        passed=passed,
-        description=f"Mean risk score is {mean_score:.2f}",
-        metadata={"mean_score": mean_score},
-    )
+    return _evaluate_guardrail_stability(validated_outcomes)
 
 
 @asset_check(asset="rejection_letters")
