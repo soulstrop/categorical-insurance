@@ -15,7 +15,12 @@ from catins.orchestration.checks import (
     check_guardrail_stability,
     check_schema_drift,
 )
-from catins.orchestration.definitions import defs
+from catins.orchestration.definitions import (
+    CATINS_DAILY_CRON,
+    CATINS_DAILY_SCHEDULE_NAME,
+    CATINS_VALIDATION_JOB_NAME,
+    defs,
+)
 from catins.orchestration.resources import CortexResource, WarehouseResource
 
 
@@ -85,6 +90,16 @@ def test_cortex_budget_check_fails_on_planted_overrun() -> None:
     result = _materialize_with_cortex(cortex)
     assert result.success  # type: ignore[attr-defined]
     assert not _budget_check_passed(result)
+
+
+def test_daily_schedule_registered() -> None:
+    """The daily schedule is registered on the Definitions object."""
+    schedule_defs = list(defs.schedules)  # type: ignore[arg-type]
+    matching = [s for s in schedule_defs if s.name == CATINS_DAILY_SCHEDULE_NAME]
+    assert len(matching) == 1, f"expected one schedule, got {[s.name for s in schedule_defs]}"
+    schedule = matching[0]
+    assert schedule.cron_schedule == CATINS_DAILY_CRON
+    assert schedule.job_name == CATINS_VALIDATION_JOB_NAME
 
 
 def test_freshness_policies_attached_to_terminal_assets() -> None:

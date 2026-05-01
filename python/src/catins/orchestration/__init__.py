@@ -12,16 +12,22 @@ from catins.orchestration.checks import (
     check_schema_drift,
 )
 from catins.orchestration.definitions import (
+    CATINS_DAILY_CRON,
+    CATINS_DAILY_SCHEDULE_NAME,
     CATINS_VALIDATION_JOB_NAME,
+    catins_daily_schedule,
     catins_job,
     defs,
 )
 from catins.orchestration.resources import CortexResource, WarehouseResource
 
 __all__ = [
+    "CATINS_DAILY_CRON",
+    "CATINS_DAILY_SCHEDULE_NAME",
     "CATINS_VALIDATION_JOB_NAME",
     "CortexResource",
     "WarehouseResource",
+    "catins_daily_schedule",
     "catins_job",
     "check_cortex_budget",
     "check_guardrail_stability",

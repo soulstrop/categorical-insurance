@@ -20,7 +20,7 @@ more verification) is fixed.
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
 | 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | decided, implementation pending |
-| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.6 done; P3.7 + P3.8–P3.11 pending) |
+| 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7 done; P3.8–P3.11 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
 
@@ -341,15 +341,17 @@ today.
 
 ## Phase 3 — Asset graph: lineage and checks visible to ops
 
-**Status: in progress.** P3.1 (Definitions + Resources, commit
-`a4cedec`), P3.2 (Cortex token-spend asset check, commit
-`291136b`), P3.3 (FreshnessPolicy on terminal assets, commit
-`719bdc8`), P3.4 (schema-drift check via the canonical generator,
-commit `6b3407f`), P3.5 (planted-regression test for guardrail-
-stability, commit `4ed800b`), and P3.6 (on-call runbook) shipped.
-P3.7 (daily ScheduleDefinition) pending. Phase-2-revisit follow-up
-checks (quarantine, classification sweep, etc.) are catalogued
-below as P3.8–P3.11 and pending.
+**Status: in progress.** P3.1–P3.7 (the originally-numbered
+tickets) shipped: Definitions + Resources (`a4cedec`), Cortex
+token-spend check (`291136b`), FreshnessPolicy on terminal
+assets (`719bdc8`), canonical-generator schema-drift check
+(`6b3407f`), planted-regression test for guardrail-stability
+(`4ed800b`), on-call runbook (`ddb532b`), daily
+ScheduleDefinition (this commit). Phase-2-revisit follow-up
+checks (P3.8–P3.11: quarantine, PII access anomaly, erasure
+latency, view-filter compliance) are catalogued below and
+pending — they need the Phase-2-revisit implementation to land
+first.
 
 **Frame.** The pipeline graph that already exists implicitly in
 Phase 2 becomes a first-class object via Dagster Software-Defined
@@ -398,8 +400,10 @@ are pending tickets.
   this ticket; covers schema drift, guardrail drift, Cortex
   budget, freshness, plus the privacy-officer / Vault / schema-
   evolution procedures from ADRs 006/007/008).
-* **[pending P3.7]** Daily `ScheduleDefinition` for the
-  `catins_validation_job`.
+* **[done P3.7]** Daily `ScheduleDefinition` for the
+  `catins_validation_job`. Cron `0 6 * * *` UTC; aligns with the
+  P3.3 24-hour freshness window with 18+ hours of overnight
+  headroom before the 12-hour warn threshold trips.
 * (Phase-2-revisit follow-ups, per ADR 002's 2026-04-30
   revision and ADRs 006/007/008. **All pending; numbered P3.8–P3.11.**)
   Additional asset checks and scheduled jobs:
