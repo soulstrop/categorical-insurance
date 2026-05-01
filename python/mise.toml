@@ -62,6 +62,10 @@ run = "uv run python -m catins.schema_evolution.compat"
 description = "Regenerate schema_baseline.json from the current catins.models state (commit it after a breaking change)"
 run = "uv run python -m catins.schema_evolution.compat --write"
 
+[tasks."privacy:classify"]
+description = "Emit the per-model PII classification report (ADR 006 §1) as JSON"
+run = "uv run python -m catins.privacy.classification"
+
 [tasks."dagster:validate"]
 description = "Validate the Dagster Definitions object (catches asset-graph misconfiguration in <1s)"
 run = "uv run dagster definitions validate -m catins.orchestration.definitions"

@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -303,6 +303,19 @@ Implementation in progress:
   worked example. Two new mise tasks: `//python:schema:compat-check`
   (CI gate) and `//python:schema:write-baseline` (regenerate
   alongside a breaking change).
+* The classification report (`catins.privacy.classification`):
+  `classify_table(model_cls)` and `classify_models(models)` walk
+  the PII annotations and return a structured `ModelClassification`
+  (PII fields sorted by category then name, with regimes; non-PII
+  fields listed). CLI `python -m catins.privacy.classification`
+  (or `//python:privacy:classify`) emits the full report as JSON.
+  This is the artifact that drives Vault role provisioning (P2R.7),
+  DDM masking-policy generation (P2R.11), and compliance review.
+  The over-protection caveat from P2R.3 is documented: the
+  proposal-level `holder_name` reports as PII unconditionally;
+  consumers that need the conditional semantic consult the union
+  branches (`IndividualHolder` vs `EntityHolder`) directly, both
+  of which appear in the report independently.
 
 Production data flow is still gated on the rest of the revisit.
 
