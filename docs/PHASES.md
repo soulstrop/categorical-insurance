@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation + erasure landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation + erasure + vault config + fnox landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -343,6 +343,17 @@ Implementation in progress:
   ``erased`` set to TRUE), and audit-logged. Identifier validation
   + single-quote escaping covers the test-tier injection surface;
   prod callers should swap to parameter binding.
+* The configuration-as-code artifacts (per ADR 006 §2 + §7):
+  `fnox.toml` at the repo root with a default (age-encrypted
+  dev) profile and a `prod` profile that pulls from
+  HashiCorp Vault under `secret/catins`; `vault/` tree with
+  the Transform engine definition for `holder_name` (FPE,
+  alphanumeric template), the `catins-tokeniser` role, and the
+  policy granting only encode/decode capabilities. README
+  documentation links land in the top-level table. None of the
+  configs run in dev (the MockTokenisationClient covers that
+  tier); they document exactly what an operator applies to a
+  real Vault server before production data flows.
 
 Production data flow is still gated on the rest of the revisit.
 

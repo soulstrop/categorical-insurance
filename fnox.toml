@@ -1,0 +1,59 @@
+# fnox.toml — secret resolution for catins
+#
+# Per ADR 006 §7, two tiers:
+#
+# * **Dev tier (default profile)** — encrypted-in-git secrets via
+#   age. The team's age recipients live below; anyone with a recipient
+#   key can decrypt locally for development. Real PII never lands here;
+#   tokens / ids are placeholders consumed by the MockTokenisationClient.
+#
+# * **Prod tier (`fnox exec --profile prod`)** — secrets read from the
+#   HashiCorp Vault instance described in `vault/`. The operator
+#   supplies VAULT_ADDR and VAULT_TOKEN via their environment; fnox
+#   uses them to fetch the rest.
+#
+# Run with secrets loaded:
+#
+#     fnox exec -- mise run //python:test            # dev tier
+#     fnox exec --profile prod -- mise run deploy    # prod tier
+#
+# The `vault/` tree is the source of truth for what's *in* the Vault
+# server (transformation engines, roles, policies); this file is the
+# source of truth for *which env vars* the catins code needs and where
+# they come from per profile.
+
+[providers]
+# Dev recipients — replace with real age public keys before any
+# encrypted secret lands. The placeholder below is non-functional;
+# `fnox set` against this provider will fail until the recipients
+# list is populated.
+age = { type = "age", recipients = [
+    "age1placeholder0000000000000000000000000000000000000000000000000",
+] }
+
+[secrets]
+# Dev-tier MockTokenisationClient doesn't need a real token, but the
+# env var must be present so the production code path can read it
+# uniformly. Plain default; not a real secret.
+CATINS_TOKENISATION_TOKEN = { default = "mock-token-not-used" }
+
+# Snowflake credentials for the dev tier are the DuckDB session — no
+# Snowflake account is contacted in dev. Defaults to empty so the
+# warehouse-protocol selector falls back to DuckDBSession.
+SNOWFLAKE_ACCOUNT = { default = "" }
+
+[profiles.prod.providers]
+# All prod secrets come from Vault under `secret/catins/...`.
+vault = { type = "vault", path = "secret/catins" }
+
+[profiles.prod.secrets]
+# Snowflake account credentials — populated by an operator who has
+# write access to Vault under `secret/catins/snowflake/*`.
+SNOWFLAKE_ACCOUNT = { provider = "vault", value = "snowflake/account" }
+SNOWFLAKE_USER = { provider = "vault", value = "snowflake/user" }
+SNOWFLAKE_PASSWORD = { provider = "vault", value = "snowflake/password" }
+
+# Tokenisation: the production catins.privacy.tokenisation client
+# uses VAULT_ADDR + VAULT_TOKEN from the environment (precondition
+# for fnox itself, not loaded here) plus the role / transformation
+# defined in `vault/`. No additional secrets needed at this layer.

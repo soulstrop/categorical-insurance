@@ -248,6 +248,8 @@ product monoid `M = ([Violation], RiskScore)` — making math.tex §VI's
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Production system architecture on Snowflake |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | On-call runbook: failure modes, diagnosis, resolution; privacy / schema-evolution procedures |
 | [`docs/REFERENCES.md`](docs/REFERENCES.md) | Bibliography of underlying papers |
+| [`fnox.toml`](fnox.toml) | Secret resolution config (per ADR 006 §7): age-encrypted dev profile, Vault prod profile |
+| [`vault/`](vault/) | Configuration-as-code for the production Vault Transform setup (per ADR 006 §2) |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Setup, mise tasks, per-language conventions, ADR authoring guidance |
 
 ## Status and direction
