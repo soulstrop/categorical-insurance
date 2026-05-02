@@ -11,6 +11,12 @@ from catins.privacy.classification import (
     classify_models,
     classify_table,
 )
+from catins.privacy.erasure import (
+    AUDIT_TABLE,
+    ErasureResult,
+    erase,
+    init_audit_table,
+)
 from catins.privacy.pii import (
     PII,
     PIICategory,
@@ -26,15 +32,19 @@ from catins.privacy.tokenisation import (
 )
 
 __all__ = [
-    "PII",
+    "AUDIT_TABLE",
+    "ErasureResult",
     "FieldClassification",
     "MockTokenisationClient",
     "ModelClassification",
+    "PII",
     "PIICategory",
     "TokenisationClient",
     "classify_models",
     "classify_table",
     "detokenise_model",
+    "erase",
+    "init_audit_table",
     "is_pii",
     "non_pii_fields",
     "pii_fields",

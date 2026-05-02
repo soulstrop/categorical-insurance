@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation + erasure landed) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -330,6 +330,19 @@ Implementation in progress:
   by default so a leak of one field's transformation keys doesn't
   compromise the others. Production swap is a single resource
   binding — the asset code calls the same Protocol either way.
+* The erasure operation (`catins.privacy.erasure`):
+  `init_audit_table(session)` creates `_audit_erasures` (UUID id,
+  timestamp, operator, target tuple, reason, JSON-serialised
+  pii_fields_nulled list, JSON-serialised pre-erasure snapshot).
+  `erase(session, table, where_column, where_value, model_cls,
+  erased_by, reason)` implements ADR 007 §1 + §4 + §6 against a
+  WarehouseSession: idempotent (the audit table is the source of
+  truth — a prior erasure of the same `(table, where_column,
+  where_value)` returns ``already_erased=True``), tombstone-with-
+  PII-null (every field with the PII annotation goes NULL,
+  ``erased`` set to TRUE), and audit-logged. Identifier validation
+  + single-quote escaping covers the test-tier injection surface;
+  prod callers should swap to parameter binding.
 
 Production data flow is still gated on the rest of the revisit.
 
