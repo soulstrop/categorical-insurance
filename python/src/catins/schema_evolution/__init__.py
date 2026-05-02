@@ -8,6 +8,12 @@ construct their own ``SchemaRegistry`` for isolation.
 
 from catins.models import SCHEMA_V1_EFFECTIVE_DATE, CanonicalProposal
 from catins.schema_evolution.dispatch import QuarantineRow, parse_proposal
+from catins.schema_evolution.quarantine import (
+    RAW_QUARANTINE_DDL,
+    RAW_QUARANTINE_TABLE,
+    init_quarantine_table,
+    write_quarantine_rows,
+)
 from catins.schema_evolution.versions import SchemaRegistry, SchemaVersion
 
 DEFAULT_REGISTRY = SchemaRegistry()
@@ -19,8 +25,12 @@ DEFAULT_REGISTRY.register(
 
 __all__ = [
     "DEFAULT_REGISTRY",
+    "RAW_QUARANTINE_DDL",
+    "RAW_QUARANTINE_TABLE",
     "QuarantineRow",
     "SchemaRegistry",
     "SchemaVersion",
+    "init_quarantine_table",
     "parse_proposal",
+    "write_quarantine_rows",
 ]

@@ -46,13 +46,21 @@ class PipelineResult:
 
 
 def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
-    """Invoke ``dbt build`` against the staging tier.
+    """Invoke ``dbt build`` against the staging tier only.
 
-    Marts are excluded because their consumer views depend on tables
-    (contracts, etc.) that the validation pipeline produces *after*
-    this step. P2R.12's end-to-end harness will run dbt twice — once
-    for staging, then again for marts post-validation — to close the
-    loop.
+    All non-staging tiers are excluded because their source tables are
+    populated at later lifecycle points:
+
+    * ``marts`` — depends on ``contracts`` produced by the validation
+      pipeline.
+    * ``audit`` — depends on ``_audit_erasures`` produced by
+      ``catins.privacy.erasure``.
+    * ``raw`` (the dbt model tier, not the source schema) — depends
+      on ``raw_quarantine`` populated by the ingest dispatcher when
+      ``parse_proposal`` rejects rows.
+
+    P2R.12's end-to-end harness will run dbt a second time once the
+    downstream tables are present, closing the loop.
     """
     profiles = profiles_dir or project_dir
     result = subprocess.run(
@@ -65,6 +73,8 @@ def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
             str(profiles),
             "--exclude",
             "marts",
+            "raw",
+            "audit",
         ],
         capture_output=True,
         text=True,

@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_quarantine
+    description: >-
+      Schema-validation failure landing. Read by the Phase 3
+      ``quarantine_check`` (P3.8); a non-empty result for the latest
+      partition surfaces a runbook entry. Not consumer-facing — the
+      ``erased = false`` filter does not apply (quarantined rows
+      have no canonical model and therefore no ``erased`` column).
+    columns:
+      - name: quarantine_id
+        data_type: VARCHAR
+        tests:
+          - not_null
+          - unique
+      - name: quarantined_at
+        data_type: TIMESTAMP
+        tests:
+          - not_null
+      - name: schema_version_seen
+        data_type: INTEGER
+      - name: reason
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: detail
+        data_type: VARCHAR
+      - name: raw_payload
+        data_type: VARCHAR
+        tests:
+          - not_null

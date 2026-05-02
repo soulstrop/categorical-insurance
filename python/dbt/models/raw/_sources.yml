@@ -1,0 +1,37 @@
+version: 2
+
+sources:
+  - name: main
+    description: >-
+      Raw-tier sources. ``raw_quarantine`` is populated by the ingest
+      path of ``catins.pipeline``: rows that fail
+      ``catins.schema_evolution.parse_proposal`` are persisted as flat
+      rows alongside the offending payload (JSON-encoded) and a short
+      reason label. ADR 008 §5 (consumer-side ingest validation with
+      quarantine).
+    schema: main
+    tables:
+      - name: raw_quarantine
+        description: >-
+          Rows the ingest dispatcher could not assign to a known
+          schema version, or that failed Pydantic validation against
+          the dispatched model.
+        columns:
+          - name: quarantine_id
+            data_type: VARCHAR
+            description: UUID per quarantined row.
+          - name: quarantined_at
+            data_type: TIMESTAMP
+            description: Wall-clock time at which the row was quarantined.
+          - name: schema_version_seen
+            data_type: INTEGER
+            description: ADR 008 schema version on the offending row, or NULL.
+          - name: reason
+            data_type: VARCHAR
+            description: Short ops label; one of "missing schema_version", "unknown schema version", "validation failed".
+          - name: detail
+            data_type: VARCHAR
+            description: Full message (e.g., Pydantic ValidationError text).
+          - name: raw_payload
+            data_type: VARCHAR
+            description: JSON-encoded original row payload.

@@ -13,7 +13,11 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   catins:
+    raw:
+      +materialized: view
     staging:
       +materialized: view
     marts:
+      +materialized: view
+    audit:
       +materialized: view

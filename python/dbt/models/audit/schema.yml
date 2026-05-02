@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: v_audit_erasures
+    description: >-
+      Audit view over ``_audit_erasures``. Privacy-officer access
+      only in prod tiers (DDM/RAP via ``compile_grants``). Read by
+      Phase 3 ``erasure_latency_check`` (P3.10) for SLA monitoring.
+      Not subject to the erasure_filter — by design (ADR 007 §4).
+    columns:
+      - name: erasure_id
+        data_type: VARCHAR
+        tests:
+          - not_null
+          - unique
+      - name: erased_at
+        data_type: TIMESTAMP
+        tests:
+          - not_null
+      - name: erased_by
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: table_name
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: where_column
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: where_value
+        data_type: VARCHAR
+        tests:
+          - not_null
+      - name: reason
+        data_type: VARCHAR
+      - name: pii_fields_nulled
+        data_type: VARCHAR
+      - name: pre_erasure_snapshot
+        data_type: VARCHAR

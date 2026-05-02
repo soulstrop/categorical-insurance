@@ -1,0 +1,43 @@
+version: 2
+
+sources:
+  - name: main
+    description: >-
+      Audit-tier sources. ``_audit_erasures`` is populated by
+      ``catins.privacy.erasure.erase``; one row per request-to-erasure
+      transaction. ADR 007 §4 requires the audit log to be immutable
+      and visible only to privacy-officer roles in prod tiers — this
+      is enforced via per-target ``compile_grants`` on the consuming
+      view.
+    schema: main
+    tables:
+      - name: _audit_erasures
+        description: Erasure audit log (one row per erasure request).
+        columns:
+          - name: erasure_id
+            data_type: VARCHAR
+            description: UUID per erasure transaction.
+          - name: erased_at
+            data_type: TIMESTAMP
+            description: Wall-clock time of the erasure.
+          - name: erased_by
+            data_type: VARCHAR
+            description: Operator identity (audit responsibility chain).
+          - name: table_name
+            data_type: VARCHAR
+            description: Table the erasure targeted.
+          - name: where_column
+            data_type: VARCHAR
+            description: Column of the WHERE predicate.
+          - name: where_value
+            data_type: VARCHAR
+            description: Value of the WHERE predicate.
+          - name: reason
+            data_type: VARCHAR
+            description: Free-text reason supplied by the operator.
+          - name: pii_fields_nulled
+            data_type: VARCHAR
+            description: JSON array of fields nulled during the erasure.
+          - name: pre_erasure_snapshot
+            data_type: VARCHAR
+            description: JSON-encoded row state immediately before the erasure.
