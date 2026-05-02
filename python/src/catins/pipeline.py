@@ -29,6 +29,16 @@ from catins.cortex import BudgetedCortex
 from catins.decision import DecisionSystem
 from catins.models import CanonicalProposal, Proposal, extraction_fields
 from catins.monoid import ListMonoid, Monoid
+from catins.privacy.erasure import init_audit_table
+from catins.privacy.tokenisation import TokenisationClient, tokenise_model
+from catins.schema_evolution import (
+    DEFAULT_REGISTRY,
+    QuarantineRow,
+    SchemaRegistry,
+    init_quarantine_table,
+    parse_proposal,
+    write_quarantine_rows,
+)
 from catins.snowpark import register_validator, run_validation_pipeline
 from catins.warehouse import WarehouseSession
 
@@ -42,7 +52,12 @@ class PipelineResult:
     extracted: int
     cortex_tokens: int
     cortex_budget: int
+    quarantined: int = 0
     rule_breakdown: dict[str, int] = field(default_factory=dict)
+
+
+_PRE_VALIDATION_EXCLUDES = ("marts", "raw", "audit")
+_POST_VALIDATION_SELECTS = ("marts", "raw", "audit")
 
 
 def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
@@ -59,30 +74,48 @@ def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
       on ``raw_quarantine`` populated by the ingest dispatcher when
       ``parse_proposal`` rejects rows.
 
-    P2R.12's end-to-end harness will run dbt a second time once the
-    downstream tables are present, closing the loop.
+    The end-to-end harness invokes :func:`run_dbt_build_post` after
+    validation to close the loop.
     """
     profiles = profiles_dir or project_dir
-    result = subprocess.run(
-        [
-            "dbt",
-            "build",
-            "--project-dir",
-            str(project_dir),
-            "--profiles-dir",
-            str(profiles),
-            "--exclude",
-            "marts",
-            "raw",
-            "audit",
-        ],
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-        check=False,
-    )
+    cmd = [
+        "dbt",
+        "build",
+        "--project-dir",
+        str(project_dir),
+        "--profiles-dir",
+        str(profiles),
+        "--exclude",
+        *_PRE_VALIDATION_EXCLUDES,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy(), check=False)
     if result.returncode != 0:
         msg = f"dbt build failed:\n{result.stdout}\n{result.stderr}"
+        raise RuntimeError(msg)
+
+
+def run_dbt_build_post(project_dir: Path, profiles_dir: Path | None = None) -> None:
+    """Build marts / raw / audit tiers after validation has run.
+
+    Closes the loop opened by :func:`run_dbt_build`: ``contracts``,
+    ``raw_quarantine``, and ``_audit_erasures`` exist in the warehouse
+    by this point (the harness initialises the latter two as empty if
+    nothing wrote to them, so dbt always has a source to read).
+    """
+    profiles = profiles_dir or project_dir
+    cmd = [
+        "dbt",
+        "build",
+        "--project-dir",
+        str(project_dir),
+        "--profiles-dir",
+        str(profiles),
+        "--select",
+        *_POST_VALIDATION_SELECTS,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy(), check=False)
+    if result.returncode != 0:
+        msg = f"dbt build (post-validation) failed:\n{result.stdout}\n{result.stderr}"
         raise RuntimeError(msg)
 
 
@@ -105,6 +138,35 @@ def extract_proposals(
     return extracted
 
 
+def _dispatch_records[P: Proposal](
+    records: list[dict[str, Any]],
+    proposal_cls: type[P],
+    registry: SchemaRegistry,
+) -> tuple[list[P], list[QuarantineRow]]:
+    """Route extracted records through ``parse_proposal``.
+
+    Records without a ``schema_version`` field default to v1 (the only
+    version the registry knows about today) — Cortex extracts only the
+    domain fields, so the dispatcher would always quarantine them
+    otherwise. The default is harmless for known-good upstreams; for
+    untrusted external feeds, callers should pre-stamp ``schema_version``
+    on every record.
+    """
+    valid: list[P] = []
+    quarantined: list[QuarantineRow] = []
+    for record in records:
+        record_with_version = {"schema_version": 1, **record}
+        result = parse_proposal(record_with_version, registry)
+        if isinstance(result, QuarantineRow):
+            quarantined.append(result)
+        else:
+            # The registry maps v1 → ``proposal_cls``; ``isinstance``
+            # confirms the cast statically and at runtime.
+            assert isinstance(result, proposal_cls)
+            valid.append(result)
+    return valid, quarantined
+
+
 def run_pipeline[P: Proposal, M](
     *,
     session_factory: Callable[[], WarehouseSession],
@@ -117,40 +179,66 @@ def run_pipeline[P: Proposal, M](
     dbt_project_dir: Path | None = None,
     udf_name: str = "validate_proposal",
     source_table: str = "stg_proposals",
+    tokenisation_client: TokenisationClient | None = None,
+    registry: SchemaRegistry | None = None,
 ) -> PipelineResult:
-    """Run the full Phase 2 pipeline.
+    """Run the full Phase 2 / Phase-2-revisit pipeline.
 
     The harness:
 
-    1. Invokes ``dbt build`` if ``dbt_project_dir`` is given. Because
-       file-backed DuckDB only allows a single writer, the harness
-       does *not* hold a session during this step; ``session_factory``
-       is called afterwards.
-    2. Lifts ``raw_texts`` through Cortex extraction and writes the
-       resulting structured rows to ``source_table`` if extraction is
-       part of the run.
-    3. Registers the validator UDF on the session.
-    4. Materialises ``contracts`` / ``rejections`` / ``rejection_summary``
+    1. Invokes ``dbt build`` (staging tier only) if ``dbt_project_dir``
+       is given. Because file-backed DuckDB only allows a single
+       writer, the harness does *not* hold a session during this step;
+       ``session_factory`` is called afterwards.
+    2. Lifts ``raw_texts`` through Cortex extraction.
+    3. Routes each extracted record through ``parse_proposal`` against
+       ``registry`` (defaulting to ``DEFAULT_REGISTRY``):
+       successes are kept, ``QuarantineRow``\\ s are written to
+       ``raw_quarantine``.
+    4. Tokenises direct-PII string fields on the survivors via
+       ``tokenisation_client`` (when provided) and writes them to
+       ``source_table``.
+    5. Registers the validator UDF on the session.
+    6. Materialises ``contracts`` / ``rejections`` / ``rejection_summary``
        via ``run_validation_pipeline``.
+    7. If ``dbt_project_dir`` is given, closes the session and runs a
+       second dbt build for ``marts`` / ``raw`` / ``audit`` so the
+       consumer-facing views (and the audit view) reflect the run's
+       output. ``raw_quarantine`` and ``_audit_erasures`` are
+       initialised empty before the build so dbt always has a source
+       to read, even if nothing was quarantined or erased.
     """
     if dbt_project_dir is not None:
         run_dbt_build(dbt_project_dir)
 
+    active_registry = registry if registry is not None else DEFAULT_REGISTRY
     session = session_factory()
 
     extracted_count = 0
+    quarantined_count = 0
     if raw_texts is not None:
         # Cortex extracts the *required* domain fields (no defaults);
-        # Pydantic supplies the discriminator (holder_kind defaults to
-        # "individual") and the inherited metadata fields below.
+        # _dispatch_records stamps schema_version=1 and routes through
+        # parse_proposal so failures (e.g., unknown version after future
+        # registry pruning, validation regressions) land in quarantine
+        # rather than crashing the run.
         records = extract_proposals(cortex, raw_texts, fields=extraction_fields(proposal_cls))
         extracted_count = len(records)
-        if records:
-            # Cortex extracts only domain fields; validate through Pydantic
-            # so the metadata fields (schema_version, schema_effective_date,
-            # erased) get their defaults before the row lands in the
-            # warehouse with the canonical column set.
-            full_records = [proposal_cls(**r).model_dump() for r in records]
+
+        valid, quarantined = _dispatch_records(records, proposal_cls, active_registry)
+        quarantined_count = len(quarantined)
+
+        if quarantined:
+            init_quarantine_table(session)
+            write_quarantine_rows(session, quarantined)
+
+        if valid:
+            if tokenisation_client is not None:
+                # Direct-PII string fields → tokens. Quasi-PII (zip,
+                # age) is left in plaintext; masking handles those at
+                # read time per ADR 006 §3.
+                valid = [tokenise_model(m, tokenisation_client) for m in valid]
+            full_records = [m.model_dump() for m in valid]
             session.write_table(pd.DataFrame(full_records), source_table)
 
     register_validator(
@@ -170,12 +258,25 @@ def run_pipeline[P: Proposal, M](
         zip(summary["rule_name"].tolist(), [int(n) for n in summary["n"].tolist()], strict=True)
     )
 
+    if dbt_project_dir is not None:
+        # Make sure the audit + quarantine tables exist before the
+        # second dbt build runs — both are idempotent CREATE-IF-NOT-
+        # EXISTS, so re-init is safe regardless of whether they were
+        # populated above.
+        init_quarantine_table(session)
+        init_audit_table(session)
+        # File-backed DuckDB is single-writer; release before dbt opens.
+        if hasattr(session, "close"):
+            session.close()
+        run_dbt_build_post(dbt_project_dir)
+
     return PipelineResult(
         contracts=counts["contracts"],
         rejections=counts["rejections"],
         extracted=extracted_count,
         cortex_tokens=cortex.total_tokens,
         cortex_budget=cortex.max_tokens,
+        quarantined=quarantined_count,
         rule_breakdown=rule_breakdown,
     )
 
@@ -186,6 +287,7 @@ def _result_to_json(result: PipelineResult) -> str:
             "contracts": result.contracts,
             "rejections": result.rejections,
             "extracted": result.extracted,
+            "quarantined": result.quarantined,
             "cortex_tokens": result.cortex_tokens,
             "cortex_budget": result.cortex_budget,
             "rule_breakdown": result.rule_breakdown,
@@ -200,5 +302,6 @@ __all__ = [
     "_result_to_json",
     "extract_proposals",
     "run_dbt_build",
+    "run_dbt_build_post",
     "run_pipeline",
 ]
