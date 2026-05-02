@@ -46,7 +46,14 @@ class PipelineResult:
 
 
 def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
-    """Invoke ``dbt build`` against the project directory."""
+    """Invoke ``dbt build`` against the staging tier.
+
+    Marts are excluded because their consumer views depend on tables
+    (contracts, etc.) that the validation pipeline produces *after*
+    this step. P2R.12's end-to-end harness will run dbt twice — once
+    for staging, then again for marts post-validation — to close the
+    loop.
+    """
     profiles = profiles_dir or project_dir
     result = subprocess.run(
         [
@@ -56,6 +63,8 @@ def run_dbt_build(project_dir: Path, profiles_dir: Path | None = None) -> None:
             str(project_dir),
             "--profiles-dir",
             str(profiles),
+            "--exclude",
+            "marts",
         ],
         capture_output=True,
         text=True,

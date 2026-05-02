@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: v_proposals
+    description: >-
+      Consumer-facing view over stg_proposals; filters out tombstoned
+      rows per ADR 007 §2.
+    tests:
+      - view_filters_erased
+    columns:
+      - name: holder_kind
+        data_type: VARCHAR
+      - name: holder_name
+        data_type: VARCHAR
+      - name: premium
+        data_type: DOUBLE
+      - name: zip_code
+        data_type: VARCHAR
+      - name: age
+        data_type: INTEGER
+      - name: schema_version
+        data_type: INTEGER
+      - name: schema_effective_date
+        data_type: DATE
+      - name: erased
+        data_type: BOOLEAN
+
+  - name: v_contracts
+    description: >-
+      Consumer-facing view over the contracts table produced by the
+      validation pipeline; filters out tombstoned rows per ADR 007 §2.
+    tests:
+      - view_filters_erased
+    columns:
+      - name: holder_kind
+        data_type: VARCHAR
+      - name: holder_name
+        data_type: VARCHAR
+      - name: premium
+        data_type: DOUBLE
+      - name: zip_code
+        data_type: VARCHAR
+      - name: age
+        data_type: INTEGER
+      - name: schema_version
+        data_type: INTEGER
+      - name: schema_effective_date
+        data_type: DATE
+      - name: erased
+        data_type: BOOLEAN
+      - name: payload_json
+        data_type: VARCHAR

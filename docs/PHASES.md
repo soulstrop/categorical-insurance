@@ -19,7 +19,7 @@ more verification) is fixed.
 | 0 | A working categorical pipeline on a laptop | Pure Python | implemented |
 | 1 | Two learners, one real data source, laws verified | Python + Polars/DuckDB | implemented |
 | 2 | Warehouse-native data and validation; training where ergonomic | dbt + Snowpark + Python harness | implemented |
-| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (schema fields + PII marker + holder split + version registry/dispatch + compat-check + classification report + tokenisation + erasure + vault config + fnox landed) |
+| 2-revisit | PII boundary, erasure, schema versioning (per ADRs 006–008) | Same as Phase 2 + Vault, fnox | in progress (… + dbt marts + erasure_filter macro landed; P3.11 now load-bearing) |
 | 3 | Lineage and asset checks visible to ops users | Dagster on top of Phase 2 | in progress (P3.1–P3.7, P3.11 done; P3.8–P3.10 pending Phase-2-revisit) |
 | 4 | Multi-jurisdiction; versioned policy bundles; replay | Phase 3 + policy-release infra | not started |
 | 5 | Probabilistic outputs and audit-aware governance | Research-grade extensions | not started |
@@ -354,6 +354,22 @@ Implementation in progress:
   configs run in dev (the MockTokenisationClient covers that
   tier); they document exactly what an operator applies to a
   real Vault server before production data flows.
+* The dbt marts tier and erasure-filter discipline (per
+  ADR 007 §2): `dbt/macros/erasure_filter.sql` (the canonical
+  `erased = false` predicate); `dbt/models/marts/v_proposals.sql`
+  and `v_contracts.sql` (consumer-facing views composing the
+  macro into their WHERE clauses); `dbt/tests/generic/
+  view_filters_erased.sql` (dbt generic test, applied to both
+  marts views via `marts/schema.yml`); `dbt/dbt_project.yml`
+  configures `marts/` materialisation. The Dagster
+  `check_view_filter_compliance` (P3.11), formerly vacuous, is
+  now load-bearing: it accepts either the compiled
+  ``erased = false`` literal or the raw ``{{ erasure_filter() }}``
+  macro reference, so the check is robust to whether dbt has
+  compiled. `pipeline.run_dbt_build` excludes marts because
+  their `contracts` source comes from the validation pipeline
+  (P2R.12 closes that loop with a second dbt invocation
+  post-validation).
 
 Production data flow is still gated on the rest of the revisit.
 

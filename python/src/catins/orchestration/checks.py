@@ -20,8 +20,14 @@ DBT_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "dbt" / "target" / "ma
 # ADR 007 §2 prescribes the literal predicate ``erased = false`` (case-
 # insensitive, whitespace-flexible). Equivalents like ``NOT erased``
 # are intentionally rejected: a single canonical form keeps grep,
-# review, and this check aligned.
+# review, and this check aligned. The ``{{ erasure_filter() }}`` macro
+# is the canonical way to compose the predicate from a dbt model — it
+# expands to ``erased = false`` at compile time, so a consumer view's
+# raw SQL satisfying *either* form passes the check (the macro
+# reference is enough; you don't need to have run ``dbt compile`` for
+# the check to know the predicate is in place).
 _ERASURE_FILTER_PATTERN = re.compile(r"\berased\s*=\s*false\b", re.IGNORECASE)
+_ERASURE_FILTER_MACRO = re.compile(r"\{\{\s*erasure_filter\(\s*\)\s*\}\}")
 
 # Pandas dtype string -> SQL type used by ``catins.dbt.TYPE_MAPPING``.
 # The mapping intentionally collapses 32 / 64-bit width (DuckDB's
@@ -159,13 +165,19 @@ def check_guardrail_stability(validated_outcomes: pd.DataFrame) -> AssetCheckRes
 
 
 def _consumer_views(manifest: dict[str, Any]) -> list[tuple[str, str]]:
-    """Return ``[(model_id, compiled_code), …]`` for consumer-facing views.
+    """Return ``[(model_id, sql), …]`` for consumer-facing views.
 
     Heuristic per ADR 007 line 280: consumer-facing views live under
     ``models/marts/`` and are materialised as views (tables and
     incrementals are managed by the cleaning sweep, not by the
     view-filter discipline). Anything outside ``models/marts/`` is
     treated as intermediate and exempt from the filter rule.
+
+    The returned SQL is the model's compiled output if dbt has
+    compiled (``dbt compile`` / ``dbt run`` / ``dbt build`` populates
+    it), else the raw template — either is sufficient for the
+    erasure-filter regex / macro-reference detection in
+    :func:`_has_erasure_filter`.
     """
     out: list[tuple[str, str]] = []
     for node_id, node in manifest.get("nodes", {}).items():
@@ -176,13 +188,20 @@ def _consumer_views(manifest: dict[str, Any]) -> list[tuple[str, str]]:
         path = node.get("original_file_path") or ""
         if "models/marts/" not in path.replace("\\", "/"):
             continue
-        out.append((node_id, node.get("compiled_code") or ""))
+        sql = node.get("compiled_code") or node.get("raw_code") or ""
+        out.append((node_id, sql))
     return out
 
 
 def _has_erasure_filter(sql: str) -> bool:
-    """Whether ``sql`` contains the canonical ``erased = false`` predicate."""
-    return bool(_ERASURE_FILTER_PATTERN.search(sql))
+    """Whether ``sql`` carries the erasure filter, in either canonical form.
+
+    Accepts (a) the literal ``erased = false`` predicate (compiled
+    form) or (b) the ``{{ erasure_filter() }}`` macro reference (raw
+    template form). The macro expands to (a) at compile time, so the
+    two are operationally equivalent.
+    """
+    return bool(_ERASURE_FILTER_PATTERN.search(sql) or _ERASURE_FILTER_MACRO.search(sql))
 
 
 def _evaluate_view_filter_compliance(manifest: dict[str, Any]) -> AssetCheckResult:

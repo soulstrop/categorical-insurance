@@ -53,6 +53,17 @@ def test_filter_regex_rejects_no_filter() -> None:
     assert not _has_erasure_filter("SELECT * FROM t")
 
 
+def test_filter_regex_accepts_macro_reference() -> None:
+    """Raw dbt template form (pre-compile) — the macro reference itself
+    is sufficient evidence the filter is composed in."""
+    assert _has_erasure_filter("SELECT * FROM t WHERE {{ erasure_filter() }}")
+
+
+def test_filter_regex_accepts_macro_reference_with_whitespace() -> None:
+    """Whitespace inside the Jinja braces survives the regex."""
+    assert _has_erasure_filter("SELECT * FROM t WHERE {{  erasure_filter()  }}")
+
+
 def test_no_consumer_views_passes_vacuously() -> None:
     """Today's repo state: only staging models, no marts/. Should pass."""
     manifest = {

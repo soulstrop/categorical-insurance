@@ -1,0 +1,32 @@
+version: 2
+
+sources:
+  - name: main
+    description: >-
+      Marts-tier source declarations. The ``contracts`` table is
+      produced by ``catins.snowpark.run_validation_pipeline`` (in
+      Phase 2-revisit) and consumed by ``v_contracts``; it is not
+      dbt-managed.
+    schema: main
+    tables:
+      - name: contracts
+        description: Materialised contracts produced by the validation pipeline.
+        columns:
+          - name: holder_kind
+            data_type: VARCHAR
+          - name: holder_name
+            data_type: VARCHAR
+          - name: premium
+            data_type: DOUBLE
+          - name: zip_code
+            data_type: VARCHAR
+          - name: age
+            data_type: INTEGER
+          - name: schema_version
+            data_type: INTEGER
+          - name: schema_effective_date
+            data_type: DATE
+          - name: erased
+            data_type: BOOLEAN
+          - name: payload_json
+            data_type: VARCHAR
