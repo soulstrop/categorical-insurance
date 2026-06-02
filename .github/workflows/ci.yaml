@@ -64,6 +64,8 @@ jobs:
             "https://template-selector.ieee.org/api/ieee-template-selector/template/239/download"
           unzip -o /tmp/ieee-template.zip -d docs/
       - name: Install tikz-cd via tlmgr
-        run: sudo tlmgr install tikz-cd
+        run: |
+          tlmgr init-usertree
+          tlmgr --usermode install tikz-cd
       - name: Build Math Docs
         run: mise run docs:math
