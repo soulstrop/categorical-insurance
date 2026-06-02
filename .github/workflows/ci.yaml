@@ -66,6 +66,6 @@ jobs:
       - name: Install tikz-cd via tlmgr
         run: |
           tlmgr init-usertree
-          tlmgr --usermode install tikz-cd
+          tlmgr --usermode --repository https://mirror.ctan.org/systems/texlive/tlnet install tikz-cd
       - name: Build Math Docs
         run: mise run docs:math
