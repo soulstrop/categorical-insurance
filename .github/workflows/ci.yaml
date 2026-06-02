@@ -63,13 +63,7 @@ jobs:
           curl -L -o /tmp/ieee-template.zip \
             "https://template-selector.ieee.org/api/ieee-template-selector/template/239/download"
           unzip -o /tmp/ieee-template.zip -d docs/
-      - name: Download tikz-cd from CTAN
-        run: |
-          curl -L -o /tmp/tikz-cd.zip \
-            "https://mirrors.ctan.org/graphics/pgf/contrib/tikz-cd.zip"
-          unzip -o /tmp/tikz-cd.zip -d /tmp/tikz-cd-pkg
-          STY_FILE=$(find /tmp/tikz-cd-pkg -name "tikz-cd.sty" | head -1)
-          [ -n "$STY_FILE" ] || { echo "tikz-cd.sty not found in archive"; exit 1; }
-          cp "$STY_FILE" docs/
+      - name: Install tikz-cd via tlmgr
+        run: sudo tlmgr install tikz-cd
       - name: Build Math Docs
         run: mise run docs:math
