@@ -63,5 +63,11 @@ jobs:
           curl -L -o /tmp/ieee-template.zip \
             "https://template-selector.ieee.org/api/ieee-template-selector/template/239/download"
           unzip -o /tmp/ieee-template.zip -d docs/
+      - name: Download tikz-cd from CTAN
+        run: |
+          curl -L -o /tmp/tikz-cd.zip \
+            "https://mirrors.ctan.org/graphics/pgf/contrib/tikz-cd.zip"
+          unzip -o /tmp/tikz-cd.zip tikz-cd/tikz-cd.sty -d /tmp/tikz-cd-pkg
+          cp /tmp/tikz-cd-pkg/tikz-cd/tikz-cd.sty docs/
       - name: Build Math Docs
         run: mise run docs:math
