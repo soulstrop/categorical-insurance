@@ -67,7 +67,9 @@ jobs:
         run: |
           curl -L -o /tmp/tikz-cd.zip \
             "https://mirrors.ctan.org/graphics/pgf/contrib/tikz-cd.zip"
-          unzip -o /tmp/tikz-cd.zip tikz-cd/tikz-cd.sty -d /tmp/tikz-cd-pkg
-          cp /tmp/tikz-cd-pkg/tikz-cd/tikz-cd.sty docs/
+          unzip -o /tmp/tikz-cd.zip -d /tmp/tikz-cd-pkg
+          STY_FILE=$(find /tmp/tikz-cd-pkg -name "tikz-cd.sty" | head -1)
+          [ -n "$STY_FILE" ] || { echo "tikz-cd.sty not found in archive"; exit 1; }
+          cp "$STY_FILE" docs/
       - name: Build Math Docs
         run: mise run docs:math
