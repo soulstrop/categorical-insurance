@@ -49,6 +49,15 @@ jobs:
           install: true
         env:
           MISE_EXPERIMENTAL: 1
+      - name: Install LaTeX packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            latexmk \
+            texlive-latex-extra \
+            texlive-science \
+            texlive-pictures \
+            texlive-fonts-recommended
       - name: Download IEEE journal template
         run: |
           curl -L -o /tmp/ieee-template.zip \
